@@ -129,6 +129,36 @@ test('restart recovery with a Paperless task ID never uploads again', async () =
   assert.equal(result.task.result.remoteDocumentId, 44);
 });
 
+test('an unavailable accepted Paperless task becomes actionable without re-uploading', async () => {
+  const repository = new MemoryFolioRepository();
+  await repository.writeTask(queuedTask({
+    schemaVersion: 4,
+    stage: 'processing',
+    paperlessTaskId: 'paperless-task-gone',
+  }));
+  let uploadCalls = 0;
+  const result = await runNextUploadTask({
+    profileId: 'profile-a',
+    workerId: 'relaunch',
+    repository,
+    transport: {
+      async upload() { uploadCalls += 1; return 'must-not-upload'; },
+      async poll() {
+        throw Object.assign(new Error('Paperless no longer reports this processing task.'), {
+          code: 'processing-failed',
+        });
+      },
+    },
+  });
+  assert.equal(uploadCalls, 0);
+  assert.equal(result.kind, 'failed');
+  assert.equal(result.task.stage, 'failed');
+  assert.equal(result.task.error.code, 'processing-failed');
+  assert.equal(result.task.error.retryable, false);
+  assert.equal(result.task.nextAttemptAt, undefined);
+  assert.equal(result.task.paperlessTaskId, 'paperless-task-gone');
+});
+
 test('restart recovery never resubmits an interrupted upload with no durable Paperless task ID', async () => {
   const repository = new MemoryFolioRepository();
   await repository.writeTask(queuedTask({

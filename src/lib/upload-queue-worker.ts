@@ -1,5 +1,5 @@
 import type { FolioRepository } from '../types/persistence.ts';
-import type { PersistentTask } from '../types/tasks.ts';
+import type { PersistentTask, PersistentTaskError } from '../types/tasks.ts';
 import { translateRuntime } from '../i18n/runtime.ts';
 import {
   classifyTaskFailure,
@@ -64,15 +64,15 @@ function failureDuplicateDocumentIds(error: unknown) {
   ))];
 }
 
-function classifiedQueueFailure(error: unknown, message: string) {
+function classifiedQueueFailure(error: unknown, message: string): PersistentTaskError {
   if (
     error
     && typeof error === 'object'
     && 'code' in error
-    && error.code === 'invalid-metadata'
+    && (error.code === 'invalid-metadata' || error.code === 'processing-failed')
   ) {
     return {
-      code: 'invalid-metadata' as const,
+      code: error.code,
       message,
       retryable: false,
     };

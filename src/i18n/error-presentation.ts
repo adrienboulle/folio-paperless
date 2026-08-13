@@ -120,6 +120,7 @@ export const folioDiagnosticKeys: Readonly<Record<string, TranslationKey>> = {
   'The public link could not be copied.': 'runtimeError.publicLinkCopy',
   'Paperless could not process this document.': 'runtimeError.paperlessProcess',
   'Paperless is still processing this document. Pull to refresh in a moment.': 'runtimeError.paperlessStillProcessing',
+  'Paperless no longer reports this processing task. The upload may have completed or its task history may have expired. Check Paperless, then check the status again or stop tracking it locally.': 'runtimeError.paperlessTaskUnavailable',
   'Paperless did not return a document thumbnail.': 'runtimeError.thumbnailUnavailable',
   'Paperless returned a response that exceeds Folio\'s safety limit.': 'runtimeError.responseTooLarge',
   'Paperless capabilities could not be discovered.': 'runtimeError.capabilityDiscovery',

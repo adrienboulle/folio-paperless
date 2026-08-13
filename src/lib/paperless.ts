@@ -36,7 +36,7 @@ import {
   isFolioEditableSavedViewRule,
 } from '@/lib/saved-view-controller';
 import { translateRuntime } from '../i18n/runtime.ts';
-import type { UploadMetadataDraft } from '@/types/tasks';
+import type { PersistentTaskErrorCode, UploadMetadataDraft } from '@/types/tasks';
 import {
   DOWNLOAD_STORAGE_RESERVE_BYTES,
   effectiveDownloadLimit,
@@ -46,6 +46,10 @@ import {
   negotiatePaperlessWorkspaceResources,
   resolvePaperlessDocumentStatus,
 } from '@/lib/paperless-workspace-capabilities';
+import {
+  advancePaperlessTaskAvailability,
+  DEFAULT_PAPERLESS_TASK_UNAVAILABLE_ATTEMPTS,
+} from '@/lib/paperless-task-polling';
 
 type ApiList<T> = {
   count: number;
@@ -200,6 +204,7 @@ type PaperlessUploadOptions = {
 export class PaperlessApiError extends Error {
   status?: number;
   duplicateDocumentIds?: number[];
+  code?: PersistentTaskErrorCode;
 
   constructor(message: string, status?: number) {
     super(message);
@@ -1728,13 +1733,33 @@ export async function fetchPaperlessTask(credentials: PaperlessCredentials, task
 export async function waitForPaperlessTask(
   credentials: PaperlessCredentials,
   taskId: string,
-  options: { attempts?: number; intervalMs?: number } = {},
+  options: {
+    attempts?: number;
+    intervalMs?: number;
+    unavailableAttempts?: number;
+  } = {},
 ) {
   const attempts = options.attempts ?? 60;
   const intervalMs = options.intervalMs ?? 1_500;
+  const unavailableAttempts = options.unavailableAttempts
+    ?? DEFAULT_PAPERLESS_TASK_UNAVAILABLE_ATTEMPTS;
+  let consecutiveUnavailable = 0;
 
   for (let attempt = 0; attempt < attempts; attempt += 1) {
     const task = await fetchPaperlessTask(credentials, taskId);
+    const availability = advancePaperlessTaskAvailability(
+      consecutiveUnavailable,
+      task !== null,
+      unavailableAttempts,
+    );
+    consecutiveUnavailable = availability.consecutiveUnavailable;
+    if (availability.unavailable) {
+      const error = new PaperlessApiError(
+        translateRuntime('runtimeError.paperlessTaskUnavailable'),
+      );
+      error.code = 'processing-failed';
+      throw error;
+    }
     if (task?.status === 'SUCCESS') return task;
     if (task && ['FAILURE', 'FAILED', 'REVOKED'].includes(task.status)) {
       const error = new PaperlessApiError(
@@ -1743,7 +1768,9 @@ export async function waitForPaperlessTask(
       error.duplicateDocumentIds = task.duplicateDocumentIds;
       throw error;
     }
-    await new Promise((resolve) => setTimeout(resolve, intervalMs));
+    if (attempt < attempts - 1) {
+      await new Promise((resolve) => setTimeout(resolve, intervalMs));
+    }
   }
 
   throw new PaperlessApiError(
