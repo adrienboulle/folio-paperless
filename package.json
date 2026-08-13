@@ -2,7 +2,7 @@
   "name": "folio-paperless",
   "description": "A polished, mobile-first Paperless-ngx client built with Expo and React Native.",
   "main": "index.ts",
-  "version": "0.3.4",
+  "version": "0.3.5",
   "license": "MIT",
   "repository": {
     "type": "git",

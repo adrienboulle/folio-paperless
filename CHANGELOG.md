@@ -1,5 +1,13 @@
 # Changelog
 
+## [0.3.5](https://github.com/Kirari04/folio-paperless/compare/v0.3.4...v0.3.5) (2026-08-13)
+
+
+### Bug Fixes
+
+* **uploads:** recover unavailable processing tasks ([5c33735](https://github.com/Kirari04/folio-paperless/commit/5c3373563fa68dc129531a399703f5cf1f3c12f2))
+* **uploads:** recover unavailable processing tasks ([83aab31](https://github.com/Kirari04/folio-paperless/commit/83aab31e98b0d9dd7766592e17ae8de24e8e59c6))
+
 ## [0.3.4](https://github.com/Kirari04/folio-paperless/compare/v0.3.3...v0.3.4) (2026-08-13)
 
 
