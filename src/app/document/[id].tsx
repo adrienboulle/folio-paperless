@@ -17,6 +17,7 @@ import {
   Tag,
   Trash2,
   UserRound,
+  X,
 } from 'lucide-react-native';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
@@ -62,6 +63,7 @@ import {
   isPendingDocument,
   taskIdFromPlaceholderId,
 } from '@/lib/document-routing';
+import { taskCancellationMeaning } from '@/lib/task-policy';
 import { resolvePreferredCachedPreviewSource } from '@/lib/offline-preview-policy';
 import {
   getPaperlessDocumentUrl,
@@ -123,6 +125,7 @@ function ProfileBoundDocumentDetailScreen({
   const insets = useSafeAreaInsets();
   const {
     documents,
+    tasks,
     credentials,
     activeProfile,
     syncState,
@@ -135,6 +138,7 @@ function ProfileBoundDocumentDetailScreen({
     deleteDocument,
     reprocessDocument,
     retryDocumentProcessing,
+    cancelTask,
     refresh,
     resolveDocumentId,
     resolveOfflineDocument,
@@ -154,6 +158,12 @@ function ProfileBoundDocumentDetailScreen({
     || credentials.profileId === activeProfile?.id;
   const activeCredentials = credentialsMatchActiveProfile ? credentials : null;
   const requestedTaskId = taskIdFromPlaceholderId(requestedId);
+  const pendingTask = requestedTaskId
+    ? tasks.find((task) => task.id === requestedTaskId)
+    : undefined;
+  const pendingTaskCancellationIsLocal = pendingTask
+    ? taskCancellationMeaning(pendingTask) === 'local'
+    : false;
   const [editing, setEditing] = useState(false);
   const [title, setTitle] = useState(document?.title || '');
   const [created, setCreated] = useState(document?.created || '');
@@ -546,6 +556,35 @@ function ProfileBoundDocumentDetailScreen({
     }
   }
 
+  function confirmPendingTaskCancellation() {
+    if (!requestedTaskId) return;
+    const stopsTracking = !pendingTaskCancellationIsLocal;
+    Alert.alert(
+      t(stopsTracking ? 'tasks.stopTrackingTitle' : 'tasks.cancelQueuedTitle'),
+      t(stopsTracking ? 'tasks.stopTrackingBody' : 'tasks.cancelQueuedBody'),
+      [
+        { text: t('common.cancel'), style: 'cancel' },
+        {
+          text: t(stopsTracking ? 'tasks.stopTracking' : 'tasks.cancel'),
+          style: 'destructive',
+          onPress: () => {
+            setBusyAction('processing-cancel');
+            void cancelTask(pendingTask?.id ?? requestedTaskId)
+              .then(async () => {
+                await hapticFeedback('confirm');
+                router.replace('/inbox');
+              })
+              .catch(async (error) => {
+                showToast(presentRuntimeError(error, t('tasks.actionError')), true);
+                await hapticFeedback('error');
+              })
+              .finally(() => setBusyAction(null));
+          },
+        },
+      ],
+    );
+  }
+
   function confirmDelete() {
     setMoreOpen(false);
     Alert.alert(
@@ -665,7 +704,7 @@ function ProfileBoundDocumentDetailScreen({
               {processingFailed && (
                 <Pressable
                   accessibilityLabel={t('detail.checkStatus', { title: document.title })}
-                  disabled={busyAction === 'processing-refresh'}
+                  disabled={busyAction !== null}
                   onPress={checkProcessing}
                   style={styles.processingRetry}>
                   {busyAction === 'processing-refresh' ? (
@@ -675,6 +714,29 @@ function ProfileBoundDocumentDetailScreen({
                   )}
                   <Text style={styles.processingRetryText}>
                     {busyAction === 'processing-refresh' ? t('detail.checking') : t('detail.checkAgain')}
+                  </Text>
+                </Pressable>
+              )}
+
+              {!!requestedTaskId && (
+                <Pressable
+                  accessibilityLabel={
+                    pendingTaskCancellationIsLocal
+                      ? t('tasks.cancel')
+                      : t('tasks.stopTracking')
+                  }
+                  disabled={busyAction !== null}
+                  onPress={confirmPendingTaskCancellation}
+                  style={styles.processingStopTracking}>
+                  {busyAction === 'processing-cancel' ? (
+                    <ActivityIndicator color={palette.danger} size="small" />
+                  ) : (
+                    <X color={palette.danger} size={18} />
+                  )}
+                  <Text style={styles.processingStopTrackingText}>
+                    {pendingTaskCancellationIsLocal
+                      ? t('tasks.cancel')
+                      : t('tasks.stopTracking')}
                   </Text>
                 </Pressable>
               )}
@@ -1445,6 +1507,24 @@ const styles = createThemedStyleSheet({
   },
   processingRetryText: {
     color: palette.accentInk,
+    fontFamily: fonts.sans,
+    fontSize: 13,
+    fontWeight: '900',
+  },
+  processingStopTracking: {
+    minHeight: 50,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 9,
+    borderRadius: radii.md,
+    borderWidth: 1,
+    borderColor: palette.danger,
+    backgroundColor: palette.dangerSurface,
+    marginTop: 12,
+  },
+  processingStopTrackingText: {
+    color: palette.danger,
     fontFamily: fonts.sans,
     fontSize: 13,
     fontWeight: '900',

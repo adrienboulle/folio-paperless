@@ -9,6 +9,10 @@ const taskCenterScreenSource = await readFile(
   new URL('../src/app/tasks.tsx', import.meta.url),
   'utf8',
 );
+const documentDetailScreenSource = await readFile(
+  new URL('../src/app/document/[id].tsx', import.meta.url),
+  'utf8',
+);
 
 function task(overrides = {}) {
   return {
@@ -199,6 +203,14 @@ test('Task Center identifies each upload file by its persisted MIME type', () =>
 test('Task Center treats active upload cancellation as acceptance-uncertain', () => {
   assert.match(taskCenterScreenSource, /taskCancellationMeaning\(task\) === 'acceptance-uncertain'/);
   assert.doesNotMatch(taskCenterScreenSource, /const accepted = !!task\.paperlessTaskId \|\| task\.stage === 'processing'/);
+});
+
+test('pending document details expose an honest local tracking escape hatch', () => {
+  assert.match(documentDetailScreenSource, /confirmPendingTaskCancellation/);
+  assert.match(documentDetailScreenSource, /taskCancellationMeaning\(pendingTask\) === 'local'/);
+  assert.match(documentDetailScreenSource, /cancelTask\(pendingTask\?\.id \?\? requestedTaskId\)/);
+  assert.match(documentDetailScreenSource, /tasks\.stopTracking/);
+  assert.match(documentDetailScreenSource, /router\.replace\('\/inbox'\)/);
 });
 
 test('Task Center requires a destructive confirmation before uncertain upload resubmission', () => {
