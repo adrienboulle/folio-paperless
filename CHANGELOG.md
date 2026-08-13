@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.3.4](https://github.com/Kirari04/folio-paperless/compare/v0.3.3...v0.3.4) (2026-08-13)
+
+
+### Bug Fixes
+
+* **android:** improve compact layout and dark contrast ([#43](https://github.com/Kirari04/folio-paperless/issues/43)) ([22c58c1](https://github.com/Kirari04/folio-paperless/commit/22c58c172fb213aa92e153e1f6b600eaef811938))
+
 ## [0.3.3](https://github.com/Kirari04/folio-paperless/compare/v0.3.2...v0.3.3) (2026-08-06)
 
 
