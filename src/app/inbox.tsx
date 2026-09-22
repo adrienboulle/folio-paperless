@@ -22,7 +22,7 @@ import { useRouter } from '@/lib/router';
 
 export default function InboxScreen() {
   const router = useRouter();
-  const { t, formatNumber } = useI18n();
+  const { t, formatDocumentDate, formatNumber } = useI18n();
   const { inboxDocuments, approveDocument, deferDocument, isSyncing, refresh } = useApp();
   const [toast, setToast] = useState<{ message: string; error?: boolean } | null>(null);
   const [filing, setFiling] = useState(false);
@@ -216,39 +216,51 @@ export default function InboxScreen() {
           </View>
 
           {inboxDocuments.length > 1 && (
+            // Three screens announce "N documents to review"; this is the one
+            // that shows them, so a batch of scans can be triaged in any order
+            // instead of tapping "Later" until the right one comes up.
             <View style={styles.upNext}>
-              <Text style={styles.upNextLabel}>{t('inbox.upNext')}</Text>
-              <Pressable
-                accessibilityLabel={
-                  isPendingDocument(inboxDocuments[1])
-                    ? t('inbox.viewProcessing', { title: inboxDocuments[1].title })
-                    : t('document.open', { title: inboxDocuments[1].title })
-                }
-                onPressIn={() =>
-                  router.preload({
-                    pathname: '/document/[id]',
-                    params: { id: inboxDocuments[1].id, from: 'inbox' },
-                  })
-                }
-                onPress={() =>
-                  router.push({
-                    pathname: '/document/[id]',
-                    params: { id: inboxDocuments[1].id, from: 'inbox' },
-                  })
-                }
-                style={styles.nextCard}>
-                <DocumentThumbnail document={inboxDocuments[1]} width={48} />
-                <View style={styles.nextBody}>
-                  <Text numberOfLines={1} style={styles.nextTitle}>
-                    {inboxDocuments[1].title}
-                  </Text>
-                  <Text style={styles.nextMeta}>{inboxDocuments[1].correspondent}</Text>
-                  {!!inboxDocuments[1].duplicateDocumentIds?.length && (
-                    <Text style={styles.nextDuplicate}>{t('document.duplicatesBadge', { count: formatNumber(inboxDocuments[1].duplicateDocumentIds.length) })}</Text>
-                  )}
-                </View>
-                <ChevronRight color={palette.faint} size={18} />
-              </Pressable>
+              <Text style={styles.upNextLabel}>
+                {t('inbox.upNextCount', { count: formatNumber(inboxDocuments.length - 1) })}
+              </Text>
+              <View style={styles.nextList}>
+                {inboxDocuments.slice(1).map((document) => (
+                  <Pressable
+                    accessibilityLabel={
+                      isPendingDocument(document)
+                        ? t('inbox.viewProcessing', { title: document.title })
+                        : t('document.open', { title: document.title })
+                    }
+                    key={document.id}
+                    onPressIn={() =>
+                      router.preload({
+                        pathname: '/document/[id]',
+                        params: { id: document.id, from: 'inbox' },
+                      })
+                    }
+                    onPress={() =>
+                      router.push({
+                        pathname: '/document/[id]',
+                        params: { id: document.id, from: 'inbox' },
+                      })
+                    }
+                    style={styles.nextCard}>
+                    <DocumentThumbnail document={document} width={48} />
+                    <View style={styles.nextBody}>
+                      <Text numberOfLines={1} style={styles.nextTitle}>
+                        {document.title}
+                      </Text>
+                      <Text numberOfLines={1} style={styles.nextMeta}>
+                        {document.correspondent} · {formatDocumentDate(document.created)}
+                      </Text>
+                      {!!document.duplicateDocumentIds?.length && (
+                        <Text style={styles.nextDuplicate}>{t('document.duplicatesBadge', { count: formatNumber(document.duplicateDocumentIds.length) })}</Text>
+                      )}
+                    </View>
+                    <ChevronRight color={palette.faint} size={18} />
+                  </Pressable>
+                ))}
+              </View>
             </View>
           )}
         </>
@@ -553,6 +565,9 @@ const styles = createThemedStyleSheet({
     fontWeight: '900',
     letterSpacing: 1.2,
     marginBottom: 9,
+  },
+  nextList: {
+    gap: 8,
   },
   nextCard: {
     flexDirection: 'row',
