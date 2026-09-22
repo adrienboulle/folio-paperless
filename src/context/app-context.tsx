@@ -1547,14 +1547,6 @@ export function AppProvider({ children }: PropsWithChildren) {
         },
         onResult: async (result) => {
           if (result.kind !== 'ready' || !await executionGuard!()) return;
-          if (result.task.kind === 'upload') {
-            // Only a completed upload becomes the prefill of the next document
-            // in the lot. A failed or canceled one leaves the memory untouched.
-            uploadBatchPrefillMemory.current.rememberUpload(
-              result.task.profileId,
-              result.task.metadata,
-            );
-          }
           if (result.task.kind === 'pdf-operation' || result.task.kind === 'bulk-operation') {
             await sync(taskCredentials, result.task.profileId).catch(() => undefined);
           }
@@ -3518,6 +3510,14 @@ export function AppProvider({ children }: PropsWithChildren) {
       await folioRepository.writeTask(next);
       publishTask(next);
       submitted.push(next);
+    }
+    // The lot memory is what the person last SENT, captured the moment they tap
+    // Send. Waiting for Paperless to finish would make the next sheet depend on
+    // a delay the person cannot see: two quick scans would behave differently
+    // from two slow ones. A later failure does not undo the intent either.
+    const lastSubmitted = submitted.at(-1);
+    if (lastSubmitted?.kind === 'upload') {
+      uploadBatchPrefillMemory.current.rememberUpload(profileId, lastSubmitted.metadata);
     }
     if (submitted.length) void runUploadQueue(profileId, credentials);
   }, [catalog, credentials, publishTask, runUploadQueue]);

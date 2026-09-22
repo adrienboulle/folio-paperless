@@ -359,12 +359,15 @@ test('a cold-start scan link drains once, after the Expo cache has been cleared'
   assert.equal(consumeCachedLinkingUrl(cache, () => assert.fail('replayed cold URL')), false);
 });
 
-test('only a completed upload updates the batch memory', () => {
+test('the batch memory is written when the person taps Send, not when Paperless finishes', () => {
+  // Tying the memory to task completion made two quick scans behave differently
+  // from two slow ones (device test, 2026-09-22): a hidden delay is not a rule.
   assert.match(
     appContextSource,
-    /if \(result\.kind !== 'ready' \|\| !await executionGuard!\(\)\) return;\s*\n\s*if \(result\.task\.kind === 'upload'\) \{[\s\S]{0,400}?rememberUpload\(/,
+    /const lastSubmitted = submitted\.at\(-1\);\s*\n\s*if \(lastSubmitted\?\.kind === 'upload'\) \{\s*\n\s*uploadBatchPrefillMemory\.current\.rememberUpload\(profileId, lastSubmitted\.metadata\);/,
   );
   assert.equal(appContextSource.match(/rememberUpload\(/g).length, 1);
+  assert.doesNotMatch(appContextSource, /result\.kind !== 'ready'[\s\S]{0,400}?rememberUpload\(/);
   assert.equal(appContextSource.match(/uploadBatchPrefillMemory\.current\.remember/g).length, 2);
 });
 
