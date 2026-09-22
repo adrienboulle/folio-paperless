@@ -10,7 +10,7 @@ import {
   ListChecks,
   UserRound,
 } from 'lucide-react-native';
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { ActivityIndicator, Text, TextInput, View } from 'react-native';
 
 import { AppShell } from '@/components/app-shell';
@@ -19,11 +19,12 @@ import { DocumentCard } from '@/components/document-card';
 import { FolioLogo } from '@/components/folio-logo';
 import { DocumentThumbnail } from '@/components/document-thumbnail';
 import { SectionHeading } from '@/components/section-heading';
+import { SheetToast, useSheetToast } from '@/components/sheet-toast';
 import { createThemedStyleSheet, fonts, palette, radii, shadows } from '@/constants/theme';
 import { useApp } from '@/context/app-context';
 import { useI18n } from '@/context/ui-preferences-context';
 import { presentRuntimeError } from '@/i18n/error-presentation';
-import { useRouter } from '@/lib/router';
+import { useNavigationRoute, useRouter } from '@/lib/router';
 import { presentSyncStatus, type SyncStatusTone } from '@/lib/sync-status-presentation';
 
 function syncToneColor(tone: SyncStatusTone) {
@@ -52,9 +53,24 @@ export default function HomeScreen() {
     connectionError,
     tasks,
   } = useApp();
+  const route = useNavigationRoute();
+  const { showToast, toast } = useSheetToast();
   const [query, setQuery] = useState('');
   const [isImporting, setIsImporting] = useState(false);
   const [importError, setImportError] = useState<string | null>(null);
+  /**
+   * An upload leaves the intake screen here rather than on the task centre:
+   * the confirmation is what the sender was waiting for.
+   */
+  const sentCount = Number(route.params.sent);
+  const routeKey = route.key;
+  useEffect(() => {
+    if (!Number.isInteger(sentCount) || sentCount < 1) return;
+    showToast(sentCount === 1
+      ? t('home.uploadSent')
+      : t('home.uploadSentMany', { count: formatNumber(sentCount) }));
+  }, [formatNumber, routeKey, sentCount, showToast, t]);
+
   const syncStatus = presentSyncStatus({
     connected: profileConfigured,
     lastSynced,
@@ -116,7 +132,10 @@ export default function HomeScreen() {
   );
 
   return (
-    <AppShell onRefresh={() => void refresh().catch(() => {})} refreshing={isSyncing}>
+    <AppShell
+      onRefresh={() => void refresh().catch(() => {})}
+      overlay={<SheetToast toast={toast} />}
+      refreshing={isSyncing}>
       <View style={styles.topbar}>
         <View style={styles.brand}>
           <FolioLogo />

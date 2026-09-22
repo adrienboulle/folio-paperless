@@ -1,5 +1,5 @@
 import { Check, ChevronLeft, Copy, Info, Pencil, Plus, RotateCcw, Save, Trash2 } from 'lucide-react-native';
-import { useEffect, useMemo, useRef, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
   ActivityIndicator,
   Alert,
@@ -312,6 +312,14 @@ export default function IntakeScreen() {
     : undefined;
   const selectedPreset = activeUploadPresets.find((preset) => preset.id === effectivePresetId);
 
+  /**
+   * Sending is the end of the gesture, not the start of an inspection: the
+   * home screen confirms it and the task centre stays one tap away from there.
+   */
+  const leaveAfterSend = useCallback((count: number) => {
+    router.replace({ pathname: '/', params: { sent: String(count) } });
+  }, [router]);
+
   useEffect(() => {
     if (!batch.length || batch.some((task) => task.stage !== 'preparing')) return;
     const presetId = batch[0].presetId;
@@ -331,7 +339,7 @@ export default function IntakeScreen() {
         onPress: () => {
           setBusy(true);
           void submitUploadTasks(batch.map((task) => task.id))
-            .then(() => router.replace('/tasks'))
+            .then(() => leaveAfterSend(batch.length))
             .catch((nextError) => setError(
               presentRuntimeError(nextError, t('intake.submitError')),
             ))
@@ -339,7 +347,7 @@ export default function IntakeScreen() {
         },
       },
     ]);
-  }, [activeUploadPresets, batch, formatNumber, router, submitUploadTasks, t]);
+  }, [activeUploadPresets, batch, formatNumber, leaveAfterSend, submitUploadTasks, t]);
   const presetProvenance = (() => {
     if (!selected || !draft || !selectedPreset) return null;
     const sanitizedTitle = sanitizeIntakeFilename(selected.originalName ?? '')
@@ -432,7 +440,7 @@ export default function IntakeScreen() {
             setBusy(true);
             void updateUploadTask(selected.id, next, preset.id)
               .then(() => submitUploadTasks([selected.id]))
-              .then(() => router.replace('/tasks'))
+              .then(() => leaveAfterSend(1))
               .catch((nextError) => setError(
                 presentRuntimeError(nextError, t('intake.submitError')),
               ))
@@ -545,7 +553,7 @@ export default function IntakeScreen() {
       }
       await submitUploadTasks(batch.map((task) => task.id));
       await hapticFeedback('confirm');
-      router.replace('/tasks');
+      leaveAfterSend(batch.length);
     } catch (nextError) {
       setError(presentRuntimeError(nextError, t('intake.submitError')));
       await hapticFeedback('error');
@@ -1057,6 +1065,9 @@ export default function IntakeScreen() {
           )}
         </View>
 
+        <Text style={styles.footerHelp}>{t('intake.unsetCopy')}</Text>
+      </ScrollView>
+      <SafeAreaView edges={['bottom']} style={styles.submitBar}>
         {!!displayedError && (
           <Text accessibilityLiveRegion="assertive" style={styles.error}>{displayedError}</Text>
         )}
@@ -1068,8 +1079,7 @@ export default function IntakeScreen() {
               : t('intake.queueMany', { count: formatNumber(batch.length) })}
           </Text>
         </Pressable>
-        <Text style={styles.footerHelp}>{t('intake.unsetCopy')}</Text>
-      </ScrollView>
+      </SafeAreaView>
     </SafeAreaView>
   );
 }
@@ -1130,6 +1140,7 @@ const styles = createThemedStyleSheet({
   prefillResetText: { color: palette.ink, fontFamily: fonts.sans, fontSize: 12, fontWeight: '800' },
   help: { color: palette.muted, fontFamily: fonts.sans, fontSize: 12, lineHeight: 17 },
   error: { color: palette.danger, fontFamily: fonts.sans, fontSize: 13, fontWeight: '800', lineHeight: 19 },
+  submitBar: { width: '100%', maxWidth: 760, alignSelf: 'center', gap: 10, paddingHorizontal: 18, paddingTop: 12, paddingBottom: 12, borderTopWidth: 1, borderColor: palette.line, backgroundColor: palette.canvas },
   footerHelp: { color: palette.muted, fontFamily: fonts.sans, fontSize: 11, textAlign: 'center' },
   empty: { minHeight: 360, alignItems: 'center', justifyContent: 'center', gap: 12, paddingHorizontal: 28 },
 });

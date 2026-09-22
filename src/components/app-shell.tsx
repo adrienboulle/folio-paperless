@@ -18,6 +18,7 @@ type AppShellProps = PropsWithChildren<{
   onRefresh?: () => void;
   refreshing?: boolean;
   header?: ReactNode;
+  overlay?: ReactNode;
   safeTop?: boolean;
   scrollable?: boolean;
   showDemoBanner?: boolean;
@@ -30,6 +31,7 @@ export function AppShell({
   onRefresh,
   refreshing = false,
   header,
+  overlay,
   safeTop = true,
   scrollable = true,
   showDemoBanner = true,
@@ -74,6 +76,7 @@ export function AppShell({
           </View>
         )}
       </SafeAreaView>
+      {overlay}
     </View>
   );
 }
