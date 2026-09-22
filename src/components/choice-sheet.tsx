@@ -28,6 +28,10 @@ type ChoiceSheetProps = {
   selectedIds: string[];
   multiple?: boolean;
   allowNone?: boolean;
+  /** Screens where "no value" does not mean "unassigned" (the upload review
+   * leaves the field to Paperless) name the row themselves. */
+  noneLabel?: string;
+  noneSubtitle?: string;
   createLabel?: string;
   creationAllowed?: boolean | null;
   onClose: () => void;
@@ -44,6 +48,8 @@ export function ChoiceSheet({
   selectedIds,
   multiple = false,
   allowNone = false,
+  noneLabel,
+  noneSubtitle,
   createLabel,
   creationAllowed,
   onClose,
@@ -179,8 +185,8 @@ export function ChoiceSheet({
           }}
           style={[styles.option, !draftIds.length && styles.optionSelected]}>
           <View style={styles.optionCopy}>
-            <Text style={styles.optionName}>{t('choice.none')}</Text>
-            <Text style={styles.optionMeta}>{t('choice.noneSubtitle')}</Text>
+            <Text style={styles.optionName}>{noneLabel ?? t('choice.none')}</Text>
+            <Text style={styles.optionMeta}>{noneSubtitle ?? t('choice.noneSubtitle')}</Text>
           </View>
           {!draftIds.length && <View style={styles.check}><Check color={palette.accentInk} size={16} /></View>}
         </Pressable>
