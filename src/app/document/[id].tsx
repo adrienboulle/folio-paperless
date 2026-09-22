@@ -187,6 +187,9 @@ function ProfileBoundDocumentDetailScreen({
     documentId: document?.id,
   });
   const closing = useRef(false);
+  // Read by the hardware-back listener, which must not be re-subscribed on
+  // every menu toggle: its cleanup also cancels the pending toast timer.
+  const moreOpenRef = useRef(false);
   const toastTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
   const previewVersionId = typeof selectedVersionId === 'number' ? selectedVersionId : undefined;
   const canOpenPreview = previewReady && !!activeCredentials && !!document?.remoteId;
@@ -249,8 +252,16 @@ function ProfileBoundDocumentDetailScreen({
   }, [active, reducedMotion, screenOpacity]);
 
   useEffect(() => {
+    moreOpenRef.current = moreOpen;
+  }, [moreOpen]);
+
+  useEffect(() => {
     if (!active) return;
     const backSubscription = BackHandler.addEventListener('hardwareBackPress', () => {
+      if (moreOpenRef.current) {
+        setMoreOpen(false);
+        return true;
+      }
       closeDocument();
       return true;
     });
@@ -806,6 +817,14 @@ function ProfileBoundDocumentDetailScreen({
       </SafeAreaView>
 
       {moreOpen && (
+        <Pressable
+          accessibilityLabel={t('detail.closeMenu')}
+          onPress={() => setMoreOpen(false)}
+          style={styles.moreBackdrop}
+        />
+      )}
+
+      {moreOpen && (
         <View style={[styles.moreMenu, { top: insets.top + 51 }]}>
           <Pressable
             disabled={!document.remoteId}
@@ -1351,6 +1370,14 @@ const styles = createThemedStyleSheet({
     flexDirection: 'row',
     alignItems: 'center',
     gap: 8,
+  },
+  moreBackdrop: {
+    position: 'absolute',
+    zIndex: 19,
+    top: 0,
+    left: 0,
+    right: 0,
+    bottom: 0,
   },
   moreMenu: {
     position: 'absolute',

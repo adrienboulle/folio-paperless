@@ -26,6 +26,7 @@ import { useCallback, useEffect, useRef, useState } from 'react';
 import {
   ActivityIndicator,
   Alert,
+  BackHandler,
   Linking,
   Modal,
   Platform,
@@ -288,6 +289,26 @@ export default function ScanScreen() {
     navigation.setOptions({ gestureEnabled: !isSaving });
   }, [isSaving, navigation]);
 
+  /**
+   * Leaving the review unmounts the screen, and the cleanup above discards the
+   * pages for good. A reflex press on the back button must therefore ask first.
+   */
+  const confirmAbandonScan = useCallback((proceed: () => void) => {
+    Alert.alert(t('scan.abandonTitle'), t('scan.abandonBody'), [
+      { text: t('scan.abandonKeep'), style: 'cancel' },
+      { text: t('scan.abandonConfirm'), style: 'destructive', onPress: proceed },
+    ]);
+  }, [t]);
+
+  useEffect(() => {
+    if (!scanSession || isSaving) return;
+    const subscription = BackHandler.addEventListener('hardwareBackPress', () => {
+      confirmAbandonScan(() => router.back());
+      return true;
+    });
+    return () => subscription.remove();
+  }, [confirmAbandonScan, isSaving, router, scanSession]);
+
   const depositScanFile = useCallback(async (file: PreparedScanFile) => {
     setSavingLabel(profileConfigured ? t('scan.securingCopy') : t('scan.adding'));
     const intake = profileConfigured ? await prepareDocuments([file], 'camera') : null;
@@ -531,7 +552,7 @@ export default function ScanScreen() {
             <Pressable
               accessibilityLabel={t('scan.closeReview')}
               disabled={isSaving}
-              onPress={() => router.back()}
+              onPress={() => confirmAbandonScan(() => router.back())}
               style={styles.lightIconButton}>
               <X color={palette.ink} size={21} />
             </Pressable>
