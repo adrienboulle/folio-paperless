@@ -27,7 +27,11 @@ import {
 import { SafeAreaView } from 'react-native-safe-area-context';
 
 import { MotionPressable as Pressable, useReducedMotion } from '@/components/motion';
-import { DocumentPdfPageEditor } from '@/components/document-pdf-page-editor';
+import {
+  DocumentPdfPageEditor,
+  type PdfOperationOutcome,
+} from '@/components/document-pdf-page-editor';
+import { SheetToast, useSheetToast } from '@/components/sheet-toast';
 import { createThemedStyleSheet, fonts, palette, radii } from '@/constants/theme';
 import { useApp } from '@/context/app-context';
 import { useI18n } from '@/i18n';
@@ -166,10 +170,12 @@ export function DocumentPaperless3Workspace({
   onNavigateDocument,
   onOpenTasks,
   onRefresh,
-  onToast,
+  onToast: reportToast,
   visible,
 }: DocumentPaperless3WorkspaceProps) {
   const reducedMotion = useReducedMotion();
+  // The panel is a native modal window: its own toast is the only one visible.
+  const { showToast: onToast, toast } = useSheetToast(reportToast);
   const { formatList, formatNumber, t } = useI18n();
   const { credentials, documents, trackPaperlessPdfOperation } = useApp();
   const advanced = usePaperlessAdvanced();
@@ -493,8 +499,12 @@ export function DocumentPaperless3Workspace({
     setCustomFieldSuggestionDecisions((current) => ({ ...current, [field]: decision }));
   }
 
-  async function runPdf(label: string, operation: () => Promise<{ supported: boolean; value?: PaperlessAsyncOperationResult; reason?: string; detail?: string }>) {
-    if (!remoteId) return;
+  async function runPdf(
+    label: string,
+    operation: () => Promise<{ supported: boolean; value?: PaperlessAsyncOperationResult; reason?: string; detail?: string }>,
+    options: { successMessage?: string } = {},
+  ): Promise<PdfOperationOutcome> {
+    if (!remoteId) return { ok: false };
     setBusy(label);
     setOperationResult(null);
     try {
@@ -511,17 +521,24 @@ export function DocumentPaperless3Workspace({
           paperlessTaskIds: result.value.taskIds,
         });
       } catch (trackingError) {
-        onToast(
-          t('paperless3.trackingFailed', { error: readableError(trackingError, t('paperless3.actionFailed')) }),
-          true,
-        );
-        return;
+        const trackingMessage = t('paperless3.trackingFailed', { error: readableError(trackingError, t('paperless3.actionFailed')) });
+        onToast(trackingMessage, true);
+        return { ok: false, message: trackingMessage };
       }
-      onToast(result.value.taskCorrelation !== 'unavailable'
+      const message = options.successMessage ?? (result.value.taskCorrelation !== 'unavailable'
         ? t('paperless3.tracked', { count: formatNumber(result.value.taskIds.length) })
         : t('paperless3.untracked'));
+      onToast(message);
+      try {
+        await onRefresh();
+      } catch {
+        // A refused refresh does not undo the operation Paperless accepted.
+      }
+      return { ok: true, message };
     } catch (error) {
-      onToast(readableError(error, t('paperless3.actionFailed')), true);
+      const message = readableError(error, t('paperless3.actionFailed'));
+      onToast(message, true);
+      return { ok: false, message };
     } finally {
       setBusy(null);
     }
@@ -697,7 +714,7 @@ export function DocumentPaperless3Workspace({
                     editEnabled={pdfEditEnabled}
                     editUnavailableDetail={capabilities?.features.pdf.edit.detail || t('paperless3.notAdvertisedPdf')}
                     mergeEnabled={pdfMergeEnabled}
-                    onApply={(plan) => void runPdf(
+                    onApply={(plan) => runPdf(
                       plan.hasSplits ? 'split' : 'page-edit',
                       () => advanced.api.editPdf({
                         documentId: remoteId,
@@ -707,7 +724,7 @@ export function DocumentPaperless3Workspace({
                         sourceMode: 'latest_version',
                       }),
                     )}
-                    onMerge={(documentIds) => void runPdf('merge', () => advanced.api.mergeDocuments({
+                    onMerge={(documentIds) => runPdf('merge', () => advanced.api.mergeDocuments({
                       documentIds,
                       metadataDocumentId: remoteId,
                       deleteOriginals: false,
@@ -737,6 +754,7 @@ export function DocumentPaperless3Workspace({
           )}
         </ScrollView>
         </KeyboardAvoidingView>
+        <SheetToast toast={toast} />
       </SafeAreaView>
     </Modal>
   );

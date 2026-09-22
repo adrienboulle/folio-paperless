@@ -27,6 +27,7 @@ import {
 import { SafeAreaView } from 'react-native-safe-area-context';
 
 import { MotionPressable as Pressable, useReducedMotion } from '@/components/motion';
+import { SheetToast, useSheetToast } from '@/components/sheet-toast';
 import { createThemedStyleSheet, fonts, palette, radii, shadows } from '@/constants/theme';
 import { useApp } from '@/context/app-context';
 import { useI18n } from '@/i18n';
@@ -97,11 +98,13 @@ export function DocumentFileActions({
   document,
   onClose,
   onOpenPreview,
-  onToast,
+  onToast: reportToast,
   versionId,
   visible,
 }: DocumentFileActionsProps) {
   const reducedMotion = useReducedMotion();
+  // The sheet is a native modal window: its own toast is the only one visible.
+  const { showToast: onToast, toast } = useSheetToast(reportToast);
   const { formatDate, formatFileSize, formatNumber, t } = useI18n();
   const expiryChoices: { label: string; value: PaperlessShareLinkExpiry }[] = [
     { label: t('fileActions.never'), value: { kind: 'never' } },
@@ -677,6 +680,7 @@ export function DocumentFileActions({
           )}
         </ScrollView>
         </KeyboardAvoidingView>
+        <SheetToast toast={toast} />
       </SafeAreaView>
     </Modal>
   );

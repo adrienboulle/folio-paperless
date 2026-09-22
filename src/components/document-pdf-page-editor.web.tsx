@@ -22,8 +22,8 @@ type DocumentPdfPageEditorProps = {
     operations: PaperlessPdfPageOperation[];
     hasSplits: boolean;
     removedPages: number;
-  }) => void;
-  onMerge: (documentIds: number[]) => void;
+  }) => Promise<{ ok: boolean; message?: string }>;
+  onMerge: (documentIds: number[]) => Promise<{ ok: boolean; message?: string }>;
   splitEnabled: boolean;
 };
 
@@ -74,7 +74,9 @@ export function DocumentPdfPageEditor({
               currentDocument={document}
               documents={documents}
               enabled={mergeEnabled}
-              onMerge={onMerge}
+              onMerge={(documentIds) => void onMerge(documentIds).then((outcome) => {
+                if (outcome.ok) setOpen(false);
+              })}
             />
           </ScrollView>
         </View>

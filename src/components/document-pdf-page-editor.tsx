@@ -27,6 +27,7 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import { DocumentPdfMergeSelection } from '@/components/document-pdf-merge-selection';
 import { MotionPressable as Pressable, useReducedMotion } from '@/components/motion';
+import { SheetToast, useSheetToast } from '@/components/sheet-toast';
 import { createThemedStyleSheet, fonts, palette, radii } from '@/constants/theme';
 import { useI18n } from '@/i18n';
 import {
@@ -74,6 +75,16 @@ export type PdfPageEditorApply = {
   removedPages: number;
 };
 
+/**
+ * What the workspace reports back once Paperless has answered. The editor is a
+ * full-screen modal over the panel, so it closes itself on success and shows
+ * the failure where the finger last was.
+ */
+export type PdfOperationOutcome = {
+  ok: boolean;
+  message?: string;
+};
+
 type DocumentPdfPageEditorProps = {
   busy: boolean;
   credentials: PaperlessCredentials;
@@ -82,8 +93,8 @@ type DocumentPdfPageEditorProps = {
   editEnabled: boolean;
   editUnavailableDetail?: string;
   mergeEnabled: boolean;
-  onApply: (plan: PdfPageEditorApply) => void;
-  onMerge: (documentIds: number[]) => void;
+  onApply: (plan: PdfPageEditorApply) => Promise<PdfOperationOutcome>;
+  onMerge: (documentIds: number[]) => Promise<PdfOperationOutcome>;
   splitEnabled: boolean;
 };
 
@@ -102,6 +113,7 @@ export function DocumentPdfPageEditor({
   const { colorScheme, formatNumber, t } = useI18n();
   const reducedMotion = useReducedMotion();
   const insets = useSafeAreaInsets();
+  const { showToast, toast } = useSheetToast();
   const [open, setOpen] = useState(false);
   const [retryKey, setRetryKey] = useState(0);
   const [thumbnails, setThumbnails] = useState<PdfPageThumbnail[] | null>(null);
@@ -250,12 +262,21 @@ export function DocumentPdfPageEditor({
     );
   }
 
+  async function run(operation: () => Promise<PdfOperationOutcome>) {
+    const outcome = await operation();
+    if (outcome.ok) {
+      setOpen(false);
+      return;
+    }
+    if (outcome.message) showToast(outcome.message, true);
+  }
+
   function applyPlan() {
     if (compiled.hasSplits && !splitEnabled) return;
-    const submit = () => onApply({
+    const submit = () => void run(() => onApply({
       ...compiled,
       removedPages: sourcePageCount - pages.length,
-    });
+    }));
     if (pages.length < sourcePageCount) {
       Alert.alert(
         t('paperless3.deletePagesTitle'),
@@ -477,10 +498,11 @@ export function DocumentPdfPageEditor({
               currentDocument={document}
               documents={documents}
               enabled={mergeEnabled}
-              onMerge={onMerge}
+              onMerge={(documentIds) => void run(() => onMerge(documentIds))}
             />
           </ScrollView>
           </KeyboardAvoidingView>
+          <SheetToast toast={toast} />
         </View>
       </Modal>
     </>
