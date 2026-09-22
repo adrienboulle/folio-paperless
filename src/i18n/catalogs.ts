@@ -5120,7 +5120,7 @@ export const fr: Record<TranslationKey, string> = {
   'library.untagged': 'Sans étiquette',
   'library.pdfs': 'PDF',
   'library.typeChip': 'Type',
-  'library.tagChip': 'Étiquettes',
+  'library.tagChip': 'Dossier',
   'library.thisYear': 'Cette année',
   'library.applied': 'APPLIQUÉS',
   'library.clearAllFilters': 'Effacer tous les filtres',
