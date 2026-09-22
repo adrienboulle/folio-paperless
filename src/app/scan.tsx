@@ -218,9 +218,9 @@ export default function ScanScreen() {
     importDocument,
     isBootstrapping,
     prefillUploadBatchFromTags,
-    prepareDocuments,
     preferences,
     preferencesReady,
+    prepareDocuments,
     profiles,
     switchProfile,
   } = useApp();
@@ -359,12 +359,13 @@ export default function ScanScreen() {
       || autoLaunchRef.current
       || isBootstrapping
       || !preferencesReady
+      || !preferences.autoLaunchScanner
       || profiles.length > 1
     ) return;
     autoLaunchRef.current = true;
     const timer = setTimeout(() => void startScan(), 220);
     return () => clearTimeout(timer);
-  }, [isBootstrapping, preferencesReady, profiles.length, startScan]);
+  }, [isBootstrapping, preferences.autoLaunchScanner, preferencesReady, profiles.length, startScan]);
 
   async function selectDestination(profileId: string) {
     if (isSaving || switchingProfileId) return;

@@ -14,9 +14,9 @@ import {
   Info,
   Languages,
   ListTodo,
-  Search,
   RefreshCw,
   ScanLine,
+  Search,
   Server,
   ShieldCheck,
   SunMoon,
@@ -515,6 +515,22 @@ export default function SettingsScreen() {
             title={t('settings.scanEngineInstallFairScan')}
             subtitle={t('settings.scanEngineInstallFairScanSubtitle')}
             trailing={<ChevronRight color={colors.faint} size={18} />}
+          />
+        )}
+        {Platform.OS === 'android' && (
+          <SettingRow
+            icon={ScanLine}
+            title={t('settings.autoLaunchScannerTitle')}
+            subtitle={t('settings.autoLaunchScannerSubtitle')}
+            trailing={
+              <Switch
+                disabled={preferenceSaving === 'autoLaunchScanner'}
+                onValueChange={(value) => togglePreference('autoLaunchScanner', value)}
+                trackColor={{ false: colors.lineStrong, true: colors.ink }}
+                thumbColor={preferences.autoLaunchScanner ? colors.lime : colors.paper}
+                value={preferences.autoLaunchScanner}
+              />
+            }
           />
         )}
         <SettingRow

@@ -285,6 +285,8 @@ const defaultPreferences: AppPreferences = {
   biometricLock: false,
   scanEngine: DEFAULT_SCAN_ENGINE_PREFERENCE,
   realThumbnails: true,
+  // foyer : « rien d'automatique, on peut vouloir un import » (2026-09-22) ; l'amont garde true (PR #53)
+  autoLaunchScanner: false,
   processingNotifications: false,
   notificationPrivacy: 'redacted',
   osSearchEnabled: false,
