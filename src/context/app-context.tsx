@@ -1060,15 +1060,26 @@ export function AppProvider({ children }: PropsWithChildren) {
     activeProfileIdRef.current = activeProfileId;
   }, [activeProfileId]);
 
+  const publishedCredentials = useRef<PaperlessCredentials | null>(null);
   const publishCredentials = useCallback((
     nextCredentials: PaperlessCredentials | null,
     options: { networkReady?: boolean } = {},
   ) => {
-    foregroundCredentialBinding.current = nextCredentials
-      ? { generation: profileGeneration.current, credentials: nextCredentials }
+    // A republish that carries the same context (foreground restore, cold-start
+    // hydration, profile snapshot reload) keeps the object identity: consumers
+    // that key effects, caches or screens on `credentials` then see no change,
+    // instead of reloading as if a new login had happened. A different token,
+    // server or client identity still publishes a new object.
+    const previous = publishedCredentials.current;
+    const published = nextCredentials && previous && sameCredentialContext(previous, nextCredentials)
+      ? previous
+      : nextCredentials;
+    publishedCredentials.current = published;
+    foregroundCredentialBinding.current = published
+      ? { generation: profileGeneration.current, credentials: published }
       : null;
-    setNetworkCredentialsReady(!!nextCredentials && options.networkReady !== false);
-    setCredentials(nextCredentials);
+    setNetworkCredentialsReady(!!published && options.networkReady !== false);
+    setCredentials(published);
   }, []);
 
   const refreshProfileOwnership = useCallback(async () => {

@@ -43,3 +43,11 @@ test('the advanced workspace keeps its session across an equal credentials objec
   assert.match(workspace, /\(loading && !loadedOnce\)/);
   assert.doesNotMatch(workspace, /setLoading\(true\);\s*setPdfAccess\(null\);/);
 });
+
+test('a republish with the same credential context keeps the credentials object identity', async () => {
+  const context = await readFile(new URL('../src/context/app-context.tsx', import.meta.url), 'utf8');
+  assert.match(context, /const published = nextCredentials && previous && sameCredentialContext\(previous, nextCredentials\)\s*\?\s*previous\s*:\s*nextCredentials;/);
+  assert.match(context, /setCredentials\(published\);/);
+  // publishCredentials is the only writer of the credentials state.
+  assert.equal((context.match(/setCredentials\(/g) ?? []).length, 1);
+});
