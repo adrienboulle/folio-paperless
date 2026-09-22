@@ -136,9 +136,9 @@ test('every translated catalog has the same non-empty keys and placeholders as E
 });
 
 test('offline queue and coordinator fallbacks are localized in every catalog', () => {
-  assert.equal(en['taskRuntime.syncFailed'], 'Workspace synchronization failed.');
-  assert.equal(de['taskRuntime.syncFailed'], 'Die Arbeitsbereichssynchronisierung ist fehlgeschlagen.');
-  assert.equal(fr['taskRuntime.syncFailed'], 'La synchronisation de l’espace de travail a échoué.');
+  assert.equal(en['taskRuntime.syncFailed'], 'The library refresh failed.');
+  assert.equal(de['taskRuntime.syncFailed'], 'Die Aktualisierung der Bibliothek ist fehlgeschlagen.');
+  assert.equal(fr['taskRuntime.syncFailed'], 'L’actualisation de la bibliothèque a échoué.');
   assert.match(en['appError.offlineMetadataMissing'], /filename and file type/);
   assert.match(de['appError.offlineMetadataMissing'], /Dateinamen und Dateityp/);
   assert.match(fr['appError.offlineMetadataMissing'], /nom de fichier et le type de fichier/);
@@ -213,7 +213,7 @@ test('the real provider reactively follows system theme and locale, then honors 
   assert.equal(probe.props.locale, 'en');
   assert.equal(probe.props.localeTag, 'en-US');
   assert.equal(probe.props.navigationLabel, 'Library');
-  assert.equal(probe.props.runtimeDiagnostic, 'Sync failed · no synchronized cache yet');
+  assert.equal(probe.props.runtimeDiagnostic, 'Could not refresh · no local copy yet');
   assert.equal(probe.props.runtimeNumber, new Intl.NumberFormat('en-US').format(12_345.6));
   assert.equal(
     probe.props.runtimeList,
@@ -242,7 +242,7 @@ test('the real provider reactively follows system theme and locale, then honors 
   assert.equal(probe.props.navigationLabel, 'Bibliothek');
   assert.equal(
     probe.props.runtimeDiagnostic,
-    'Synchronisierung fehlgeschlagen · noch kein synchronisierter Cache',
+    'Aktualisierung nicht möglich · noch keine lokale Kopie',
   );
   assert.equal(probe.props.runtimeNumber, new Intl.NumberFormat('de-DE').format(12_345.6));
   assert.equal(
@@ -312,7 +312,7 @@ test('a French system locale renders French copy and French formatting', async (
   assert.equal(probe.props.navigationLabel, 'Bibliothèque');
   assert.equal(
     probe.props.runtimeDiagnostic,
-    'Synchronisation échouée · aucun cache synchronisé pour l’instant',
+    'Actualisation impossible · aucune copie locale',
   );
   assert.equal(probe.props.number, new Intl.NumberFormat('fr-FR').format(12_345.6));
   assert.equal(probe.props.list, new Intl.ListFormat('fr-FR').format(['Alpha', 'Beta', 'Gamma']));
@@ -484,7 +484,7 @@ test('known Folio service diagnostics localize while Paperless text stays unchan
     ],
     [
       'The selected representation could not be downloaded.',
-      'Die ausgewählte Darstellung konnte nicht geladen werden.',
+      'Die gewählte Datei konnte nicht heruntergeladen werden.',
     ],
     [
       'The system share sheet could not be opened.',
@@ -500,7 +500,7 @@ test('known Folio service diagnostics localize while Paperless text stays unchan
     ],
     [
       'The active profile has no cached workspace for bulk reconciliation.',
-      'Das aktive Profil hat keinen zwischengespeicherten Arbeitsbereich für den Sammelabgleich.',
+      'Diese Verbindung hat keine lokale Kopie der Bibliothek für eine Sammeländerung.',
     ],
   ];
   for (const [message, expected] of diagnostics) {
@@ -587,6 +587,77 @@ test('every HTTP failure message from Paperless is localized and actionable', as
     }
   }
   setRuntimeLocale('en');
+});
+
+/** One object, one word. These are the screens the household opens every day:
+ * home, library, inbox, scan, the upload sheet, a document and settings. The
+ * words below belong to the server or to the code, never to those screens. The
+ * exceptions are the connection form and the storage sub-screen of Settings,
+ * where the technical word may stay, in brackets. */
+const everydayPrefixes = [
+  'home.', 'nav.', 'syncStatus.', 'inbox.', 'scan.', 'intake.', 'tasks.',
+  'taskRuntime.', 'detail.', 'fileActions.', 'library.', 'document.', 'bulk.',
+  'trash.', 'deep.', 'savedViews.', 'settings.',
+];
+
+const jargonAllowedIn = new Set([
+  // Connection form and About: the server's own vocabulary.
+  'settings.apiToken', 'settings.apiTokenLabel', 'settings.apiTokenPlaceholder',
+  'settings.paperlessDocsSubtitle', 'settings.privacyNoteNative', 'settings.privacyNoteWeb',
+  // Storage sub-screen: "cache" stays, in brackets, next to the plain words.
+  'settings.cacheAutomatic', 'settings.cacheLimit', 'settings.clearCache',
+]);
+
+test('everyday screens speak the household glossary, not the server one', () => {
+  const jargon = [
+    [/\bcache\b/i, 'cache'],
+    [/espace de travail|Arbeitsbereich|workspace/i, 'workspace'],
+    [/jeton|token/i, 'token'],
+    [/\bAPI\b/, 'API'],
+    [/point de terminaison|endpoint|Endpunkt/i, 'endpoint'],
+    [/m[ée]tadonn[ée]e|Metadaten|metadata/i, 'metadata'],
+    [/repr[ée]sentation/i, 'representation'],
+    [/file d’attente|Warteschlange|queue/i, 'queue'],
+    [/num[ée]ris/i, 'numériser'],
+  ];
+  const offenders = [];
+  for (const [locale, catalog] of Object.entries({ en, de, fr })) {
+    for (const [key, value] of Object.entries(catalog)) {
+      if (!everydayPrefixes.some((prefix) => key.startsWith(prefix))) continue;
+      if (jargonAllowedIn.has(key)) continue;
+      // Placeholder names are code, not copy: what the person reads is the
+      // value Folio substitutes, which the glossary already governs.
+      const copy = value.replaceAll(/\{\{[^}]*\}\}/g, '');
+      for (const [pattern, label] of jargon) {
+        if (pattern.test(copy)) offenders.push(`${locale} ${key}: ${label}`);
+      }
+    }
+  }
+  assert.deepEqual(offenders, []);
+});
+
+test('one object keeps one word across the everyday screens', () => {
+  const sameWord = [
+    ['tasks.title', 'home.taskCenter'],
+    ['tasks.queued', 'taskRuntime.queued', 'taskRuntime.queuedAt'],
+    ['fileActions.archive', 'fileActions.archiveSearchable'],
+    ['fileActions.original', 'fileActions.originalUpload'],
+    ['fileActions.representation', 'detail.fileOptions'],
+    ['detail.download', 'fileActions.exportSave'],
+    ['document.noCorrespondent', 'document.unknownCorrespondent'],
+    ['detail.reprocess', 'bulk.reprocess'],
+  ];
+  for (const [locale, catalog] of Object.entries({ en, de, fr })) {
+    for (const [first, ...rest] of sameWord) {
+      for (const key of rest) {
+        assert.equal(catalog[key], catalog[first], `${locale}: ${key} must read like ${first}`);
+      }
+    }
+  }
+  assert.equal(fr['intake.queueOne'], 'Envoyer');
+  assert.equal(fr['tasks.title'], 'Envois');
+  assert.equal(fr['settings.syncNow'], 'Actualiser maintenant');
+  assert.equal(fr['home.scanPaper'], 'Scanner');
 });
 
 test('app-generated notification copy follows the active locale', () => {
@@ -804,7 +875,7 @@ test('stored appearance and locale are the first visible provider render before 
   assert.equal(firstVisibleProbe.props.navigationLabel, 'Bibliothek');
   assert.equal(
     firstVisibleProbe.props.runtimeDiagnostic,
-    'Synchronisierung fehlgeschlagen · noch kein synchronisierter Cache',
+    'Aktualisierung nicht möglich · noch keine lokale Kopie',
   );
   await act(async () => renderer.unmount());
 
