@@ -85,6 +85,14 @@ import {
   StagedFileCleanupError,
 } from '@/lib/task-staging-cleanup';
 import {
+  MAX_TRACKED_UPLOAD_BATCH_PREFILLS,
+  UploadBatchPrefillMemory,
+  libraryFilterUploadBatchPrefill,
+  uploadBatchPrefillFields,
+  type AppliedUploadBatchPrefill,
+  type UploadBatchPrefill,
+} from '@/lib/upload-batch-prefill';
+import {
   applyUploadMetadata,
   applyUploadPreset,
   assertUploadMetadataReferencesCurrent,
@@ -303,7 +311,9 @@ type ImportFile = {
 
 type ImportDocumentOptions = {
   onProgress?: (progress: number) => void;
-  metadata?: UploadMetadataDraft;
+  /** Partial so a batch prefill can fill some fields and leave the rest to
+   * the source-default preset and to the staging step. */
+  metadata?: Partial<UploadMetadataDraft>;
   presetId?: string;
   source?: IntakeSource;
   deferSubmission?: boolean;
@@ -352,6 +362,9 @@ type AppContextValue = {
   tasks: PersistentTask[];
   intakeRejectionBatches: IntakeRejectionBatchNotice[];
   uploadPresets: UploadPreset[];
+  /** What a staged batch was prefilled with, by batch ID, so the upload sheet
+   * can say where the values came from and clear exactly those fields. */
+  uploadBatchPrefills: Record<string, AppliedUploadBatchPrefill>;
   offlineUsage: OfflineCacheUsage | null;
   resolveDocumentId: (id: string) => string;
   preferences: AppPreferences;
@@ -399,6 +412,11 @@ type AppContextValue = {
   importDocument: (file: ImportFile, options?: ImportDocumentOptions) => Promise<void>;
   importDocuments: (files: ImportFile[], options?: ImportDocumentOptions) => Promise<AppIntakeBatchResult>;
   prepareDocuments: (files: ImportFile[], source?: IntakeSource) => Promise<AppIntakeBatchResult>;
+  clearUploadBatchPrefill: (batchId: string) => void;
+  prefillUploadBatchFromTags: (tags: PaperlessOption[], label?: string) => void;
+  reportLibraryTagFilter: (
+    selection: { tagIds: readonly string[]; label?: string } | null,
+  ) => void;
   dismissIntakeRejectionBatch: (batchId: string) => void;
   updateUploadTask: (taskId: string, metadata: UploadMetadataDraft, presetId?: string) => Promise<void>;
   submitUploadTasks: (taskIds: string[]) => Promise<void>;
@@ -1018,6 +1036,12 @@ export function AppProvider({ children }: PropsWithChildren) {
   const [intakeRejectionBatches, setIntakeRejectionBatches] =
     useState<IntakeRejectionBatchNotice[]>([]);
   const [uploadPresets, setUploadPresets] = useState<UploadPreset[]>([]);
+  const [uploadBatchPrefills, setUploadBatchPrefills] =
+    useState<Record<string, AppliedUploadBatchPrefill>>({});
+  // Batch scanning memory. It is deliberately not persisted: a restart or an
+  // hour without an upload ends the lot it describes.
+  const uploadBatchPrefillMemory = useRef(new UploadBatchPrefillMemory());
+  const libraryTagFilter = useRef<{ tagIds: readonly string[]; label?: string } | null>(null);
   const [offlineUsage, setOfflineUsage] = useState<OfflineCacheUsage | null>(null);
   const [documentIdAliases, setDocumentIdAliases] = useState<Record<string, string>>({});
   const [preferences, setPreferences] = useState(defaultPreferences);
@@ -1530,6 +1554,14 @@ export function AppProvider({ children }: PropsWithChildren) {
         },
         onResult: async (result) => {
           if (result.kind !== 'ready' || !await executionGuard!()) return;
+          if (result.task.kind === 'upload') {
+            // Only a completed upload becomes the prefill of the next document
+            // in the lot. A failed or canceled one leaves the memory untouched.
+            uploadBatchPrefillMemory.current.rememberUpload(
+              result.task.profileId,
+              result.task.metadata,
+            );
+          }
           if (result.task.kind === 'pdf-operation' || result.task.kind === 'bulk-operation') {
             await sync(taskCredentials, result.task.profileId).catch(() => undefined);
           }
@@ -3280,7 +3312,7 @@ export function AppProvider({ children }: PropsWithChildren) {
           metadata: options.metadata
             ? applyUploadMetadata(presetMetadata, {
                 ...options.metadata,
-                title: options.metadata.title.state === 'unset'
+                title: options.metadata.title?.state === 'unset'
                   ? presetMetadata.title
                   : options.metadata.title,
               })
@@ -3370,20 +3402,101 @@ export function AppProvider({ children }: PropsWithChildren) {
     [importDocuments],
   );
 
+  /**
+   * The prefill a new batch opens with: the remembered previous upload of this
+   * profile, or, when there is none, the tags of the library filter or saved
+   * view in view. A filter may mix correspondents and document types, so only
+   * its tags are borrowed.
+   */
+  const resolveUploadBatchPrefill = useCallback((profileId: string): UploadBatchPrefill | null => {
+    const remembered = uploadBatchPrefillMemory.current.read(profileId);
+    if (remembered) return remembered;
+    const filter = libraryTagFilter.current;
+    if (!filter) return null;
+    const fallback = libraryFilterUploadBatchPrefill(filter.tagIds, catalog.tags, filter.label);
+    if (!fallback) return null;
+    return {
+      profileId,
+      origin: 'library-filter',
+      ...(fallback.label ? { label: fallback.label } : {}),
+      metadata: fallback.metadata,
+      recordedAt: Date.now(),
+    };
+  }, [catalog.tags]);
+
   const prepareDocuments = useCallback(
     async (files: ImportFile[], source: IntakeSource = 'picker') => {
       const profileId = credentials?.profileId ?? activeProfileIdRef.current;
       const preset = profileId
         ? defaultPresetForSource(uploadPresets, profileId, source)
         : undefined;
-      return importDocuments(files, {
+      // Batch scanning: ten annexes of one folder share their destination, so
+      // the sheet opens filled in like the previous upload. The title is never
+      // part of a prefill, and the sheet says where the values came from.
+      const prefill = profileId ? resolveUploadBatchPrefill(profileId) : null;
+      const result = await importDocuments(files, {
         source,
         deferSubmission: true,
         presetId: preset?.id,
+        ...(prefill ? { metadata: prefill.metadata } : {}),
       });
+      const fields = prefill ? uploadBatchPrefillFields(prefill.metadata) : [];
+      if (prefill && fields.length && result.batchId && result.accepted.length) {
+        const applied: AppliedUploadBatchPrefill = {
+          batchId: result.batchId,
+          origin: prefill.origin,
+          ...(prefill.label ? { label: prefill.label } : {}),
+          fields,
+        };
+        setUploadBatchPrefills((current) => {
+          const next = { ...current, [applied.batchId]: applied };
+          const batchIds = Object.keys(next);
+          return batchIds.length <= MAX_TRACKED_UPLOAD_BATCH_PREFILLS
+            ? next
+            : Object.fromEntries(batchIds
+              .slice(batchIds.length - MAX_TRACKED_UPLOAD_BATCH_PREFILLS)
+              .map((batchId) => [batchId, next[batchId]]));
+        });
+      }
+      return result;
     },
-    [credentials?.profileId, importDocuments, uploadPresets],
+    [credentials?.profileId, importDocuments, resolveUploadBatchPrefill, uploadPresets],
   );
+
+  /** "Reset" in the upload sheet: this batch stops reporting a prefill, and
+   * the profile forgets its remembered upload so the rest of the lot is not
+   * filled in again. */
+  const clearUploadBatchPrefill = useCallback((batchId: string) => {
+    const profileId = activeProfileIdRef.current;
+    if (profileId) uploadBatchPrefillMemory.current.forget(profileId);
+    setUploadBatchPrefills((current) => {
+      if (!current[batchId]) return current;
+      const next = { ...current };
+      delete next[batchId];
+      return next;
+    });
+  }, []);
+
+  /** A `folio-paperless://scan?tags=…` link becomes the prefill of its lot. */
+  const prefillUploadBatchFromTags = useCallback((
+    tags: PaperlessOption[],
+    label?: string,
+  ) => {
+    const profileId = credentials?.profileId ?? activeProfileIdRef.current;
+    if (!profileId) return;
+    uploadBatchPrefillMemory.current.rememberTags(profileId, tags, {
+      origin: 'link',
+      ...(label ? { label } : {}),
+    });
+  }, [credentials?.profileId]);
+
+  /** The library reports the filter in view so a first upload with no previous
+   * one can still open with the tags the person is looking at. */
+  const reportLibraryTagFilter = useCallback((
+    selection: { tagIds: readonly string[]; label?: string } | null,
+  ) => {
+    libraryTagFilter.current = selection?.tagIds.length ? selection : null;
+  }, []);
 
   const updateUploadTask = useCallback(async (
     taskId: string,
@@ -4129,6 +4242,10 @@ export function AppProvider({ children }: PropsWithChildren) {
       importDocument,
       importDocuments,
       prepareDocuments,
+      uploadBatchPrefills,
+      clearUploadBatchPrefill,
+      prefillUploadBatchFromTags,
+      reportLibraryTagFilter,
       dismissIntakeRejectionBatch,
       updateUploadTask,
       submitUploadTasks,
@@ -4185,6 +4302,10 @@ export function AppProvider({ children }: PropsWithChildren) {
       importDocument,
       importDocuments,
       prepareDocuments,
+      uploadBatchPrefills,
+      clearUploadBatchPrefill,
+      prefillUploadBatchFromTags,
+      reportLibraryTagFilter,
       updateUploadTask,
       submitUploadTasks,
       isBootstrapping,

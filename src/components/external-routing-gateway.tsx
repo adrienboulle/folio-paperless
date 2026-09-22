@@ -150,6 +150,17 @@ export function ExternalRoutingGateway() {
         );
         return;
       }
+      // A refused scan link is explained instead of silently falling back to
+      // Home, because the fix is to ask for a corrected link.
+      if (accepted.code?.startsWith('scan-')) {
+        Alert.alert(
+          t('routing.scanLinkTitle'),
+          t(accepted.code === 'scan-secret-in-link'
+            ? 'routing.scanSecretRejected'
+            : 'routing.scanLinkRejected'),
+        );
+        return;
+      }
       runtime.current.acceptRoute({ kind: 'home', source: 'deep-link' });
       drainExternalRoutes();
     };
