@@ -169,6 +169,7 @@ test('the appearance setting ships enabled and survives a preference blob withou
   assert.match(context, /realThumbnails: true,/);
   assert.match(
     context,
-    /typeof merged\.realThumbnails === 'boolean'\s*\?\s*merged\s*:\s*\{ \.\.\.merged, realThumbnails: defaultPreferences\.realThumbnails \}/,
+    // branche foyer : la normalisation est combinée avec celle du moteur de scan (#49)
+    /typeof mergedPreferences\.realThumbnails === 'boolean'\s*\?\s*mergedPreferences\.realThumbnails\s*:\s*defaultPreferences\.realThumbnails/,
   );
 });
