@@ -191,6 +191,14 @@ export const folioDiagnosticKeys: Readonly<Record<string, TranslationKey>> = {
   'The file could not be exported.': 'runtimeError.fileExportFailed',
   'The durable task does not contain a metadata update.': 'runtimeError.metadataPayloadMissing',
   'The durable metadata target is invalid.': 'runtimeError.metadataTargetInvalid',
+  'Paperless rejected this change. Check the entered values.': 'runtimeError.http400',
+  'The API token was rejected. Create a new token in your Paperless profile.': 'runtimeError.http401',
+  'This Paperless account does not have permission to perform that action.': 'runtimeError.http403',
+  'This item no longer exists on the Paperless server.': 'runtimeError.http404',
+  'This Paperless server does not support API version 10.': 'runtimeError.http406',
+  'This file is larger than the upload limit configured for Paperless or its proxy.': 'runtimeError.http413',
+  'Paperless is receiving too many requests. Wait a moment and try again.': 'runtimeError.http429',
+  'The Paperless server encountered an error. Try again in a moment.': 'runtimeError.http5xx',
   'Kept the server metadata.': 'taskRuntime.metadataKeptServer',
   'Discarded the local metadata change.': 'taskRuntime.metadataDiscardedLocal',
 };
@@ -268,6 +276,11 @@ const dynamicFolioDiagnostics: readonly {
   {
     pattern: /^Paperless returned HTTP (\d+)\.$/,
     key: 'runtimeError.paperlessHttp',
+    values: (match) => ({ status: match[1] }),
+  },
+  {
+    pattern: /^Paperless returned status (\d+)\.$/,
+    key: 'runtimeError.httpStatus',
     values: (match) => ({ status: match[1] }),
   },
   {

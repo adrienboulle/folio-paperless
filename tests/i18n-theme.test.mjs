@@ -562,6 +562,33 @@ test('every registered Folio-owned diagnostic resolves through both complete cat
   setRuntimeLocale('en');
 });
 
+test('every HTTP failure message from Paperless is localized and actionable', async () => {
+  const source = await readFile(new URL('../src/lib/paperless.ts', import.meta.url), 'utf8');
+  const readable = source.slice(source.indexOf('function readableError('));
+  const messages = [...readable.slice(0, readable.indexOf('\nfunction ')).matchAll(/return (?:detail \|\| )?'((?:[^'\\]|\\.)+)'/g)]
+    .map((match) => match[1].replaceAll("\\'", "'"));
+  assert.ok(messages.length >= 8, 'readableError should still declare its HTTP messages');
+  for (const message of messages) {
+    assert.ok(folioDiagnosticKeys[message], `${message} is not registered as a Folio diagnostic`);
+  }
+  setRuntimeLocale('fr');
+  assert.equal(
+    presentRuntimeMessage('The API token was rejected. Create a new token in your Paperless profile.'),
+    'Connexion refusée par Paperless. Reconnectez-vous depuis les réglages.',
+  );
+  assert.equal(
+    presentRuntimeMessage('Paperless returned status 418.'),
+    'Paperless a répondu par une erreur inattendue (418). Réessayez dans un instant.',
+  );
+  for (const locale of ['en', 'de', 'fr']) {
+    for (const message of messages) {
+      const presented = translate(locale, folioDiagnosticKeys[message]);
+      assert.ok(/[.!]\s*\S/.test(presented), `${locale} ${message} must say what happened and what to do`);
+    }
+  }
+  setRuntimeLocale('en');
+});
+
 test('app-generated notification copy follows the active locale', () => {
   setRuntimeLocale('de');
   const notification = createNotificationContent({
