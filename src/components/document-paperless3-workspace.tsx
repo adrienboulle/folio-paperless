@@ -73,6 +73,7 @@ type DocumentPaperless3WorkspaceProps = {
   onRefresh: () => Promise<void>;
   onToast: (message: string, error?: boolean) => void;
   visible: boolean;
+  initialTab?: WorkspaceTab;
 };
 
 function isRecord(value: unknown): value is Record<string, unknown> {
@@ -168,15 +169,22 @@ export function DocumentPaperless3Workspace({
   onRefresh,
   onToast,
   visible,
+  initialTab = 'tags',
 }: DocumentPaperless3WorkspaceProps) {
   const reducedMotion = useReducedMotion();
   const { formatList, formatNumber, t } = useI18n();
   const { credentials, documents, trackPaperlessPdfOperation } = useApp();
   const advanced = usePaperlessAdvanced();
   const controller = useRef<AbortController | null>(null);
-  const [tab, setTab] = useState<WorkspaceTab>('tags');
+  const tagsController = useRef<AbortController | null>(null);
+  const principalsController = useRef<AbortController | null>(null);
+  const [tab, setTab] = useState<WorkspaceTab>(initialTab);
   const [loading, setLoading] = useState(false);
   const [loadedOnce, setLoadedOnce] = useState(false);
+  const [tagsLoading, setTagsLoading] = useState(false);
+  const [tagsLoaded, setTagsLoaded] = useState(false);
+  const [principalsLoading, setPrincipalsLoading] = useState(false);
+  const [principalsLoaded, setPrincipalsLoaded] = useState(false);
   const [tagHierarchy, setTagHierarchy] = useState<PaperlessTagHierarchy | null>(null);
   const [tagError, setTagError] = useState<string | null>(null);
   const [selectedTagIds, setSelectedTagIds] = useState<number[]>([]);
@@ -234,7 +242,10 @@ export function DocumentPaperless3Workspace({
   const pdfPasswordEnabled = pdfSourceMutationAuthorized
     && capabilities?.features.pdf.removePassword.supported === true;
 
-  const loadWorkspace = useCallback(async () => {
+  // Only the document detail is fetched when the panel opens: it carries the PDF
+  // access snapshot, the permissions and the duplicate list. The tag catalogue and
+  // the user and group lists are paid for by the tab that needs them.
+  const loadCore = useCallback(async () => {
     if (!advancedApi || !capabilities || !remoteId) return;
     controller.current?.abort();
     const nextController = new AbortController();
@@ -258,6 +269,12 @@ export function DocumentPaperless3Workspace({
       }
       setPdfAccess(nextPdfAccess);
       setDuplicates(extractDuplicateSummaries(detail.data));
+      setSelectedTagIds(isRecord(detail.data) && Array.isArray(detail.data.tags)
+        ? detail.data.tags.filter((id): id is number => typeof id === 'number' && Number.isSafeInteger(id))
+        : document.tagIds.flatMap((id) => {
+            const option = catalog.tags.find((tag) => tag.id === id);
+            return option?.remoteId ? [option.remoteId] : [];
+          }));
       if (fullPermissions) {
         try {
           const parsed = parseDocumentSecurity(detail.data);
@@ -271,32 +288,59 @@ export function DocumentPaperless3Workspace({
           setSecurityError(readableError(error, t('paperless3.actionFailed')));
         }
       }
+    } catch (error) {
+      if (!nextController.signal.aborted) onToast(readableError(error, t('paperless3.actionFailed')), true);
+    } finally {
+      if (!nextController.signal.aborted) {
+        setLoading(false);
+        setLoadedOnce(true);
+      }
+    }
+  }, [advancedApi, capabilities, catalog.tags, document.tagIds, onToast, remoteId, t]);
 
-      if (capabilities.features.nestedTags.supported) {
-        const tagsResult = await advancedApi.listCatalog('tags', 'page_size=1000&ordering=name', nextController.signal);
-        if (tagsResult.supported) {
-          const hierarchy = normalizeNestedTags(tagsResult.value.results);
-          if (hierarchy.valid) {
-            setTagHierarchy(hierarchy.value);
-            setTagError(null);
-            const remoteTagIds = isRecord(detail.data) && Array.isArray(detail.data.tags)
-              ? detail.data.tags.filter((id): id is number => typeof id === 'number' && Number.isSafeInteger(id))
-              : document.tagIds.flatMap((id) => {
-                  const option = catalog.tags.find((tag) => tag.id === id);
-                  return option?.remoteId ? [option.remoteId] : [];
-                });
-            setSelectedTagIds(remoteTagIds);
-          } else {
-            setTagHierarchy(null);
-            setTagError(t('paperless3.unsafeHierarchy', {
-              reason: hierarchy.errors[0]
-                ? presentRuntimeMessage(hierarchy.errors[0].message)
-                : t('paperless3.invalidHierarchy'),
-            }));
-          }
+  const loadTagHierarchy = useCallback(async () => {
+    if (!advancedApi || !capabilities || !remoteId) return;
+    if (!capabilities.features.nestedTags.supported) {
+      setTagsLoaded(true);
+      return;
+    }
+    tagsController.current?.abort();
+    const nextController = new AbortController();
+    tagsController.current = nextController;
+    setTagsLoading(true);
+    try {
+      const tagsResult = await advancedApi.listCatalog('tags', 'page_size=1000&ordering=name', nextController.signal);
+      if (tagsResult.supported) {
+        const hierarchy = normalizeNestedTags(tagsResult.value.results);
+        if (hierarchy.valid) {
+          setTagHierarchy(hierarchy.value);
+          setTagError(null);
+        } else {
+          setTagHierarchy(null);
+          setTagError(t('paperless3.unsafeHierarchy', {
+            reason: hierarchy.errors[0]
+              ? presentRuntimeMessage(hierarchy.errors[0].message)
+              : t('paperless3.invalidHierarchy'),
+          }));
         }
       }
+    } catch (error) {
+      if (!nextController.signal.aborted) onToast(readableError(error, t('paperless3.actionFailed')), true);
+    } finally {
+      if (!nextController.signal.aborted) {
+        setTagsLoading(false);
+        setTagsLoaded(true);
+      }
+    }
+  }, [advancedApi, capabilities, onToast, remoteId, t]);
 
+  const loadPrincipals = useCallback(async () => {
+    if (!advancedApi || !capabilities || !remoteId) return;
+    principalsController.current?.abort();
+    const nextController = new AbortController();
+    principalsController.current = nextController;
+    setPrincipalsLoading(true);
+    try {
       const principalRequests: Promise<void>[] = [];
       if (capabilities.permissions.user.view === true) {
         principalRequests.push(
@@ -315,20 +359,37 @@ export function DocumentPaperless3Workspace({
       if (!nextController.signal.aborted) onToast(readableError(error, t('paperless3.actionFailed')), true);
     } finally {
       if (!nextController.signal.aborted) {
-        setLoading(false);
-        setLoadedOnce(true);
+        setPrincipalsLoading(false);
+        setPrincipalsLoaded(true);
       }
     }
-  }, [advancedApi, capabilities, catalog.tags, document.tagIds, onToast, remoteId, t]);
+  }, [advancedApi, capabilities, onToast, remoteId, t]);
 
   useEffect(() => {
     if (!visible) return;
-    const frame = requestAnimationFrame(() => void loadWorkspace());
+    const frame = requestAnimationFrame(() => void loadCore());
     return () => {
       cancelAnimationFrame(frame);
       controller.current?.abort();
     };
-  }, [loadWorkspace, visible]);
+  }, [loadCore, visible]);
+
+  useEffect(() => {
+    if (!visible || tab !== 'tags' || tagsLoaded || tagsLoading) return;
+    const frame = requestAnimationFrame(() => void loadTagHierarchy());
+    return () => cancelAnimationFrame(frame);
+  }, [loadTagHierarchy, tab, tagsLoaded, tagsLoading, visible]);
+
+  useEffect(() => {
+    if (!visible || tab !== 'access' || principalsLoaded || principalsLoading) return;
+    const frame = requestAnimationFrame(() => void loadPrincipals());
+    return () => cancelAnimationFrame(frame);
+  }, [loadPrincipals, principalsLoaded, principalsLoading, tab, visible]);
+
+  useEffect(() => () => {
+    tagsController.current?.abort();
+    principalsController.current?.abort();
+  }, []);
 
   const visibleTags = useMemo(() => {
     if (!tagHierarchy) return [];
@@ -530,11 +591,11 @@ export function DocumentPaperless3Workspace({
   if (!remoteId) return null;
 
   const tabs: { id: WorkspaceTab; label: string; icon: typeof Tags }[] = [
+    { id: 'pdf', label: t('paperless3.pdfTab'), icon: FileStack },
     { id: 'tags', label: t('paperless3.tagsTab'), icon: Tags },
     { id: 'access', label: t('paperless3.accessTab'), icon: Users },
     { id: 'duplicates', label: t('paperless3.duplicatesTab'), icon: CopyCheck },
     { id: 'suggestions', label: t('paperless3.suggestionsTab'), icon: Bot },
-    { id: 'pdf', label: t('paperless3.pdfTab'), icon: FileStack },
   ];
 
   return (
@@ -580,7 +641,7 @@ export function DocumentPaperless3Workspace({
           ) : tab === 'tags' ? (
             <>
               <SectionIntro title={t('paperless3.nestedTags')} copy={t('paperless3.nestedTagsCopy')} />
-              {!capabilities?.features.nestedTags.supported ? <Unsupported status={capabilities?.features.nestedTags.detail} /> : tagError ? <Unsupported status={tagError} /> : !tagHierarchy ? <Unsupported status={t('paperless3.noHierarchy')} /> : (
+              {tagsLoading && !tagsLoaded ? <CenterState copy={t('common.loading')} loading /> : !capabilities?.features.nestedTags.supported ? <Unsupported status={capabilities?.features.nestedTags.detail} /> : tagError ? <Unsupported status={tagError} /> : !tagHierarchy ? <Unsupported status={t('paperless3.noHierarchy')} /> : (
                 <>
                   <TextInput onChangeText={setTagQuery} placeholder={t('paperless3.searchTags')} placeholderTextColor={palette.faint} style={styles.input} value={tagQuery} />
                   <View style={styles.tree}>
@@ -619,8 +680,12 @@ export function DocumentPaperless3Workspace({
                     <ChoiceChip active={ownerId === null} label={t('paperless3.noOwner')} onPress={() => setOwnerId(null)} />
                     {catalog.owners.flatMap((owner) => owner.remoteId ? [<ChoiceChip active={ownerId === owner.remoteId} key={owner.id} label={owner.name} onPress={() => setOwnerId(owner.remoteId!)} />] : [])}
                   </ScrollView>
-                  <PermissionPrincipals draft={permissionDraft} groups={groups} onChange={setPermissionDraft} users={users} />
-                  {!users.length && !groups.length && <Text style={styles.notice}>{t('paperless3.principalsHidden')}</Text>}
+                  {principalsLoading && !principalsLoaded ? <CenterState copy={t('common.loading')} loading /> : (
+                    <>
+                      <PermissionPrincipals draft={permissionDraft} groups={groups} onChange={setPermissionDraft} users={users} />
+                      {!users.length && !groups.length && <Text style={styles.notice}>{t('paperless3.principalsHidden')}</Text>}
+                    </>
+                  )}
                   <PrimaryButton label={permissionMode === 'merge' ? t('paperless3.mergeOwner') : t('paperless3.replaceOwner')} loading={busy === 'permissions'} onPress={() => void savePermissions()} />
                 </>
               )}
