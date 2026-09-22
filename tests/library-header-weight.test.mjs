@@ -53,7 +53,7 @@ test('type and folder chips open the filter sheet on their own facet', () => {
   // The PDF chip leaves the row; the file-type filter stays under Advanced.
   assert.doesNotMatch(library, /toggleQuickFilter\('pdf'\)/);
   assert.match(filterSheet, /mimeTypes/);
-  assert.equal(fr['library.tagChip'], 'Étiquettes');
+  assert.equal(fr['library.tagChip'], 'Dossier'); // the household's word for its filing tags (2026-09-22)
   assert.equal(de['library.typeChip'], 'Typ');
   assert.equal(en['library.typeChip'], 'Type');
 });
