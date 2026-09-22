@@ -7,6 +7,7 @@ import {
   CircleAlert,
   Download,
   Edit3,
+  FileStack,
   FileText,
   FolderArchive,
   Maximize2,
@@ -174,6 +175,7 @@ function ProfileBoundDocumentDetailScreen({
   const [previewRequest, setPreviewRequest] = useState<RepresentationPreviewRequest | null>(null);
   const [fileActionsOpen, setFileActionsOpen] = useState(false);
   const [paperlessToolsOpen, setPaperlessToolsOpen] = useState(false);
+  const [paperlessToolsTab, setPaperlessToolsTab] = useState<'tags' | 'pdf'>('tags');
   const [picker, setPicker] = useState<PickerKind>(null);
   const [moreOpen, setMoreOpen] = useState(false);
   const [busyAction, setBusyAction] = useState<string | null>(null);
@@ -850,6 +852,7 @@ function ProfileBoundDocumentDetailScreen({
             disabled={!document.remoteId}
             onPress={() => {
               setMoreOpen(false);
+              setPaperlessToolsTab('tags');
               setPaperlessToolsOpen(true);
             }}
             style={styles.moreAction}>
@@ -857,6 +860,20 @@ function ProfileBoundDocumentDetailScreen({
             <View style={styles.moreCopy}>
               <Text style={styles.moreLabel}>{t('detail.paperlessTools')}</Text>
               <Text style={styles.moreMeta}>{t('detail.paperlessToolsCopy')}</Text>
+            </View>
+          </Pressable>
+          <Pressable
+            disabled={!document.remoteId}
+            onPress={() => {
+              setMoreOpen(false);
+              setPaperlessToolsTab('pdf');
+              setPaperlessToolsOpen(true);
+            }}
+            style={styles.moreAction}>
+            <FileStack color={palette.ink} size={17} />
+            <View style={styles.moreCopy}>
+              <Text style={styles.moreLabel}>{t('detail.editPages')}</Text>
+              <Text style={styles.moreMeta}>{t('detail.editPagesCopy')}</Text>
             </View>
           </Pressable>
           <Pressable onPress={confirmDelete} style={styles.moreAction}>
@@ -1236,6 +1253,7 @@ function ProfileBoundDocumentDetailScreen({
         <DocumentPaperless3Workspace
           catalog={catalog}
           document={document}
+          initialTab={paperlessToolsTab}
           onClose={() => setPaperlessToolsOpen(false)}
           onNavigateDocument={(remoteId) => {
             setPaperlessToolsOpen(false);

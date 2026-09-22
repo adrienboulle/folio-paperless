@@ -415,6 +415,33 @@ export function movePdfEditorSelection(
   return next;
 }
 
+// The merge sheet keeps the document you started from inside the merge — its
+// metadata is the one the merged document inherits — but its place in the order
+// is as free as any other, so an appendix scanned afterwards can come second.
+export function togglePdfMergeSelection(
+  selected: readonly number[],
+  documentId: number,
+  pinnedDocumentId: number,
+): number[] {
+  if (documentId === pinnedDocumentId) return [...selected];
+  return selected.includes(documentId)
+    ? selected.filter((id) => id !== documentId)
+    : [...selected, documentId];
+}
+
+export function movePdfMergeSelection(
+  selected: readonly number[],
+  documentId: number,
+  direction: -1 | 1,
+): number[] {
+  const index = selected.indexOf(documentId);
+  const target = index + direction;
+  if (index < 0 || target < 0 || target >= selected.length) return [...selected];
+  const next = [...selected];
+  [next[index], next[target]] = [next[target], next[index]];
+  return next;
+}
+
 export function rotatePdfEditorSelection(
   pages: readonly PdfEditorPage[],
   selectedSourcePages: ReadonlySet<number>,
