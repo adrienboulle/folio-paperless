@@ -18,6 +18,10 @@ import {
   profileSecretsAuthorizeSameContext,
 } from '../src/lib/auth/credential-authority.ts';
 import {
+  profileNeedsReconnection,
+  reconnectDraftForProfile,
+} from '../src/lib/auth/reconnect.ts';
+import {
   CONNECTION_PROFILE_INDEX_KEY,
   PROFILE_PUBLICATION_JOURNAL_KEY,
   PROFILE_SECRET_KEY_PREFIX,
@@ -1119,4 +1123,71 @@ test('identity cleanup waits for fresh mTLS metadata and secret publication', as
   assert.deepEqual(deleted, []);
   assert.equal((await profiles.getSnapshot()).profiles[0].id, 'profile-mtls');
   assert.equal((await secrets.read('profile-mtls')).clientIdentityRef, 'ios-keychain:alice');
+});
+
+
+function storedProfile(auth, status = { code: 'authentication-error' }) {
+  return {
+    id: 'profile-one',
+    displayName: 'Maison',
+    serverUrl: 'https://paperless.example',
+    auth,
+    customHeaderNames: [],
+    status,
+    createdAt: NOW,
+    updatedAt: NOW,
+  };
+}
+
+test('a rejected connection is what asks the household to reconnect', () => {
+  assert.equal(profileNeedsReconnection(null), false);
+  assert.equal(profileNeedsReconnection(storedProfile({ kind: 'token' }, { code: 'available' })), false);
+  assert.equal(profileNeedsReconnection(storedProfile({ kind: 'token' })), true);
+});
+
+test('reconnecting reuses the saved connection instead of the full form', () => {
+  const oidc = storedProfile({
+    kind: 'oidc',
+    issuer: 'https://id.example',
+    clientId: 'folio-mobile',
+    redirectUri: 'stale://callback',
+    scopes: ['openid', 'email'],
+  });
+  const draft = reconnectDraftForProfile(oidc, 'folio-paperless://oidc');
+  assert.deepEqual(draft, {
+    profileId: 'profile-one',
+    displayName: 'Maison',
+    serverUrl: 'https://paperless.example',
+    auth: {
+      kind: 'oidc',
+      issuer: 'https://id.example',
+      clientId: 'folio-mobile',
+      redirectUri: 'folio-paperless://oidc',
+      scopes: ['openid', 'email'],
+      forceLogin: true,
+    },
+  });
+
+  const identity = {
+    identityId: 'ios-keychain:alice',
+    subject: 'CN=Alice',
+    issuer: 'CN=Home CA',
+    expiresAt: '2030-01-01T00:00:00.000Z',
+    hasPrivateKey: true,
+    source: 'os-credential-store',
+  };
+  assert.deepEqual(
+    reconnectDraftForProfile(storedProfile({ kind: 'mutual-tls', identity }), 'folio-paperless://oidc').auth,
+    { kind: 'mutual-tls', identityAction: 'reuse', identity },
+  );
+});
+
+test('connections that need a typed secret still go through the connection form', () => {
+  for (const auth of [
+    { kind: 'token' },
+    { kind: 'paperless-credentials', username: 'alice' },
+    { kind: 'custom-headers', headerNames: ['X-Folio'] },
+  ]) {
+    assert.equal(reconnectDraftForProfile(storedProfile(auth), 'folio-paperless://oidc'), null);
+  }
 });
