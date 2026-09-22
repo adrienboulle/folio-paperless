@@ -5946,6 +5946,7 @@ export const fr: Record<TranslationKey, string> = {
   'paperless3.pageEditorOpen': 'Ouvrir l’éditeur de pages',
   'paperless3.pageEditorTitle': 'Éditeur de pages PDF',
   'paperless3.pageEditorPreparing': 'Préparation des aperçus de pages privés…',
+  'paperless3.pageEditorRenderingPages': 'Rendu des aperçus de pages…',
   'paperless3.pageEditorRendererUnavailable': 'Les aperçus de pages nécessitent le moteur de rendu PDF natif, dans une version de développement ou de production.',
   'paperless3.pageEditorSelectHint': 'Sélectionnez des pages, puis réordonnez-les, faites-les tourner, supprimez-les ou découpez-les avant d’appliquer.',
   'paperless3.pageEditorSelectedCount': '{{count}} pages sélectionnées',
