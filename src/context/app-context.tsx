@@ -195,9 +195,11 @@ import {
   testPaperlessProfileConnection,
 } from '@/lib/auth/fetch-adapter';
 import {
+  folioOidcRedirectUri,
   loginWithExpoOidc,
   revokeOidcSession,
 } from '@/lib/auth/oidc-expo';
+import { reconnectDraftForProfile } from '@/lib/auth/reconnect';
 import { prepareNativeMutualTls } from '@/lib/auth/native-mtls-adapter';
 import { getNativeMtlsTransport } from '@/lib/auth/native-mtls-module';
 import { presentAuthError } from '@/lib/auth/error-presentation';
@@ -391,6 +393,9 @@ type AppContextValue = {
     draft: ConnectionProfileDraft,
     preparationId?: string,
   ) => Promise<ConnectionProfile>;
+  /** Re-establishes the active connection after the server rejected it.
+   * `reconnected: false` means the connection form is still required. */
+  reconnectActiveProfile: () => Promise<{ reconnected: boolean }>;
   renameConnectionProfile: (profileId: string, displayName: string) => Promise<void>;
   revokeProfileOidc: (profileId: string) => Promise<{ revoked: boolean; logoutOpened: boolean }>;
   refreshProfileOwnership: () => Promise<void>;
@@ -1121,6 +1126,27 @@ export function AppProvider({ children }: PropsWithChildren) {
     setDocumentDetailsVersion((current) => current + 1);
   }, []);
 
+  /** Records a rejected authority on the profile itself so every tab can offer
+   * the reconnection, not only the screen that happened to run the request.
+   * A later success clears it, so the banner never outlives the failure. */
+  const recordProfileAuthStatus = useCallback(async (
+    profileId: string,
+    code: 'authentication-error' | 'available',
+    summary: string,
+  ) => {
+    const snapshot = await connectionProfiles.getSnapshot().catch(() => null);
+    const profile = snapshot?.profiles.find((item) => item.id === profileId);
+    if (!profile || profile.status.code === code) return;
+    if (code === 'available' && profile.status.code !== 'authentication-error') return;
+    const now = new Date().toISOString();
+    const next = await connectionProfiles.update({
+      ...profile,
+      status: { code, checkedAt: now, summary },
+      updatedAt: now,
+    }).catch(() => null);
+    if (next) setProfiles(next.profiles);
+  }, []);
+
   const publishProfileRevocation = useCallback((
     removedProfileId: string,
     snapshot: { profiles: ConnectionProfile[]; activeProfileId: string | null },
@@ -1263,6 +1289,7 @@ export function AppProvider({ children }: PropsWithChildren) {
         setCreationCapabilities(nextCreationCapabilities);
         setLastSynced(committedWorkspace.lastSyncedAt);
         setSyncState('current');
+        void recordProfileAuthStatus(profileId, 'available', translateRuntime('profiles.connected'));
       } catch (error) {
         if (generation !== profileGeneration.current || activeProfileIdRef.current !== profileId) return;
         const message = errorMessage(error);
@@ -1285,6 +1312,7 @@ export function AppProvider({ children }: PropsWithChildren) {
         if (authorizationLost) {
           setDocuments((current) => revokeRemoteDocumentVisibility(current));
           clearDocumentDetails();
+          void recordProfileAuthStatus(profileId, 'authentication-error', message);
         }
         setConnectionError(message);
         setSyncState(onlineRef.current === false ? 'offline' : 'error');
@@ -1293,7 +1321,7 @@ export function AppProvider({ children }: PropsWithChildren) {
         if (generation === profileGeneration.current) setIsSyncing(false);
       }
     },
-    [clearDocumentDetails],
+    [clearDocumentDetails, recordProfileAuthStatus],
   );
 
   const publishTask = useCallback((task: PersistentTask) => {
@@ -2506,6 +2534,23 @@ export function AppProvider({ children }: PropsWithChildren) {
     publishProfileRevocation,
     switchProfile,
   ]);
+
+  const reconnectActiveProfile = useCallback(async () => {
+    const snapshot = await connectionProfiles.getSnapshot();
+    const profile = snapshot.profiles.find((item) => item.id === snapshot.activeProfileId);
+    if (!profile) throw new Error(translateRuntime('appError.selectProfileSync'));
+    const draft = reconnectDraftForProfile(profile, folioOidcRedirectUri());
+    if (!draft) return { reconnected: false };
+    const test = await testConnectionProfile(draft);
+    try {
+      await saveConnectionProfile(draft, test.preparationId);
+    } catch (error) {
+      await discardConnectionProfileTest(test.preparationId).catch(() => undefined);
+      throw error;
+    }
+    setConnectionError(null);
+    return { reconnected: true };
+  }, [discardConnectionProfileTest, saveConnectionProfile, testConnectionProfile]);
 
   const renameConnectionProfile = useCallback(async (
     profileId: string,
@@ -4224,6 +4269,7 @@ export function AppProvider({ children }: PropsWithChildren) {
       testConnectionProfile,
       discardConnectionProfileTest,
       saveConnectionProfile,
+      reconnectActiveProfile,
       renameConnectionProfile,
       revokeProfileOidc,
       refreshProfileOwnership,
@@ -4355,6 +4401,7 @@ export function AppProvider({ children }: PropsWithChildren) {
       switchProfile,
       testConnectionProfile,
       removeProfile,
+      reconnectActiveProfile,
       renameConnectionProfile,
       revokeProfileOidc,
       totalDocuments,

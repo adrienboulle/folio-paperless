@@ -10,6 +10,7 @@ import {
 import { SafeAreaView } from 'react-native-safe-area-context';
 
 import { DemoModeBanner } from '@/components/demo-mode-banner';
+import { ReconnectBanner } from '@/components/reconnect-banner';
 import { createThemedStyleSheet, bottomNavHeight, maxContentWidth, palette } from '@/constants/theme';
 import { useApp } from '@/context/app-context';
 
@@ -67,11 +68,13 @@ export function AppShell({
               contentStyle,
             ]}>
             {!profileConfigured && showDemoBanner && <DemoModeBanner />}
+            <ReconnectBanner />
             {children}
           </ScrollView>
         ) : (
           <View style={[styles.staticContent, contentStyle]}>
             {!profileConfigured && showDemoBanner && <DemoModeBanner />}
+            <ReconnectBanner />
             {children}
           </View>
         )}

@@ -141,6 +141,11 @@ export default function SettingsScreen() {
   }, [navigationRoute.params.connect]);
   const connectPrefillActive = connectPrefill !== null
     && dismissedConnectRouteKey !== navigationRoute.key;
+  // The reconnection banner routes here for the connection methods that need a
+  // secret typed by hand. The sheet then opens on the saved connections, and
+  // the dismissed route key keeps it closed until the next navigation.
+  const reconnectRequested = navigationRoute.params.reconnect === '1'
+    && dismissedConnectRouteKey !== navigationRoute.key;
   const [osSearchCapability, setOsSearchCapability] = useState<OsSearchCapability | null>(() => (
     Platform.OS === 'web'
       ? { supported: false, engine: 'unsupported', reason: 'native-module-unavailable' }
@@ -753,7 +758,7 @@ export default function SettingsScreen() {
         setDismissedConnectRouteKey(navigationRoute.key);
       }}
       prefill={connectPrefillActive ? connectPrefill : null}
-      visible={profileManagerVisible || connectPrefillActive}
+      visible={profileManagerVisible || connectPrefillActive || reconnectRequested}
     />
     </>
   );
