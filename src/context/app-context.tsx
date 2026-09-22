@@ -276,6 +276,7 @@ const metadataUpdateController = new MetadataUpdateController(folioRepository);
 const defaultPreferences: AppPreferences = {
   biometricLock: false,
   scanEngine: DEFAULT_SCAN_ENGINE_PREFERENCE,
+  realThumbnails: true,
   processingNotifications: false,
   notificationPrivacy: 'redacted',
   osSearchEnabled: false,
@@ -1756,11 +1757,17 @@ export function AppProvider({ children }: PropsWithChildren) {
           ? { ...defaultPreferences, ...savedPreferences }
           : defaultPreferences;
         // A stored preference can predate this scanner choice, or name an
-        // engine a later build removed.
-        const restoredPreferences: AppPreferences =
-          isScanEnginePreference(mergedPreferences.scanEngine)
-            ? mergedPreferences
-            : { ...mergedPreferences, scanEngine: DEFAULT_SCAN_ENGINE_PREFERENCE };
+        // engine a later build removed; a blob written before a preference
+        // existed must not hand a non-boolean to the card renderer either.
+        const restoredPreferences: AppPreferences = {
+          ...mergedPreferences,
+          scanEngine: isScanEnginePreference(mergedPreferences.scanEngine)
+            ? mergedPreferences.scanEngine
+            : DEFAULT_SCAN_ENGINE_PREFERENCE,
+          realThumbnails: typeof mergedPreferences.realThumbnails === 'boolean'
+            ? mergedPreferences.realThumbnails
+            : defaultPreferences.realThumbnails,
+        };
         setRuntimeNotificationPreferences(
           restoredPreferences.processingNotifications,
           restoredPreferences.notificationPrivacy,

@@ -271,6 +271,11 @@ export type AppPreferences = {
   biometricLock: boolean;
   /** Which document scanner the scan screen uses; see `src/lib/scan-engine.ts`. */
   scanEngine: ScanEnginePreference;
+  /**
+   * Show the thumbnail Paperless rendered on document cards instead of the
+   * illustrated paper; see `src/lib/document-thumbnail-policy.ts`.
+   */
+  realThumbnails: boolean;
   processingNotifications: boolean;
   notificationPrivacy: 'redacted' | 'document-title';
   osSearchEnabled: boolean;
