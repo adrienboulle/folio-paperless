@@ -16,9 +16,9 @@ Universal links and Android App Links are intentionally not configured. The proj
 
 Scanning happens in batches: ten annexes of one folder reach Paperless with the same correspondent, the same document type, and the same tags. The upload sheet therefore opens filled in, says so, and offers to clear it. Every path that stages documents for review — the built-in scanner, file import, and an incoming share — uses the same rule.
 
-- **Default.** The sheet repeats the metadata of the previous successful upload of the same connection profile: created date, correspondent, document type, tags, storage path, owner, and custom fields.
+- **Default.** The sheet repeats the metadata of the upload the person last sent from the same connection profile: created date, correspondent, document type, tags, storage path, owner, and custom fields.
 - **Never repeated.** The title, which belongs to one piece of paper, and the archive serial number, which must stay unique in Paperless. The exclusion is a type (`UploadBatchPrefillField`), not a convention, so no future field can reintroduce it by accident.
-- **Only a success.** A failed, canceled, or still-queued upload leaves the memory untouched. The memory is written where the upload queue reports a `ready` upload task.
+- **Written on Send.** The memory is captured the moment the person taps Send, not when Paperless finishes processing: two quick scans must behave exactly like two slow ones, and a later failure does not undo what the person meant for the next document. Drafts that are never sent leave the memory untouched.
 - **Scope.** One entry per connection profile, held in memory only, dropped on restart and an hour after the upload it describes: a batch is contiguous, and a document scanned the next morning belongs to another one. A prefilled field never survives into the durable record of another profile.
 - **First upload.** With no previous upload, and only then, the sheet borrows the tags of the library filter or saved view in view. Tags only: a filter may legitimately mix correspondents and document types, so nothing else can be inferred from it.
 - **Fields left out.** A prefill fills in the fields the previous upload carried and leaves the others to the source-default preset, so a configured preset is never silently emptied.
