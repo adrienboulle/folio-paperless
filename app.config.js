@@ -51,7 +51,12 @@ function createConfig(sourceConfig = baseConfig) {
   }
 
   const storeBuild = distribution === 'store';
-  const { version, versionCode } = getVersionInfo(packageJson.version);
+  // Branche `foyer` (constructions du foyer, hors magasin) : FOYER_BUILD=<n> distingue chaque construction d'une même
+  // version amont pour que F-Droid la voie comme une mise à jour (versionName 0.3.5-foyer.<n>, versionCode ×100+<n>).
+  const foyerBuild = /^\d{1,2}$/.test(process.env.FOYER_BUILD ?? '') ? Number(process.env.FOYER_BUILD) : null;
+  const upstream = getVersionInfo(packageJson.version);
+  const version = foyerBuild === null ? upstream.version : `${upstream.version}-foyer.${foyerBuild}`;
+  const versionCode = foyerBuild === null ? upstream.versionCode : upstream.versionCode * 100 + foyerBuild;
   const plugins = (sourceConfig.plugins ?? []).filter(
     (plugin) => !(storeBuild && pluginName(plugin) === './plugins/withAndroidReleaseSigning'),
   );
