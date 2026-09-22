@@ -56,10 +56,15 @@ type ListFacet =
 type RangeFacet = 'created' | 'added' | 'modified' | 'archive';
 type Facet = ListFacet | RangeFacet;
 
+/** Callers can open the sheet straight on one facet, so a quick chip reaches
+ * the type or folder list in one tap instead of three. */
+export type LibraryFilterFacet = Facet;
+
 type LibraryFilterSheetProps = {
   catalog: PaperlessCatalog;
   extraRuleCount?: number;
   filters: LibraryFilters;
+  initialFacet?: LibraryFilterFacet;
   getPreviewCount: (filters: LibraryFilters) => number;
   mimeTypes: string[];
   onApply: (filters: LibraryFilters) => void;
@@ -88,6 +93,7 @@ export function LibraryFilterSheet({
   extraRuleCount = 0,
   filters,
   getPreviewCount,
+  initialFacet,
   mimeTypes,
   onApply,
   onClose,
@@ -106,14 +112,16 @@ export function LibraryFilterSheet({
   useEffect(() => {
     if (visible && !wasVisible.current) {
       setDraft(cloneLibraryFilters(filters));
-      setFacet(null);
+      setFacet(initialFacet ?? null);
       setQuery('');
       setAdvancedOpen(libraryFilterCount(filters) > 4 || extraRuleCount > 0);
       setError(null);
-      setExpandedTagIds(new Set());
+      setExpandedTagIds(initialFacet === 'tags'
+        ? selectedTagAncestorIds(catalog.tags, filters.tagIds)
+        : new Set());
     }
     wasVisible.current = visible;
-  }, [extraRuleCount, filters, visible]);
+  }, [catalog.tags, extraRuleCount, filters, initialFacet, visible]);
 
   const activeCount = libraryFilterCount(draft);
   const previewCount = useMemo(() => getPreviewCount(draft), [draft, getPreviewCount]);

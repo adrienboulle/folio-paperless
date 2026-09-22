@@ -3,7 +3,6 @@ import {
   Check,
   CheckSquare2,
   Filter,
-  FolderTree,
   LayoutGrid,
   List,
   MoreHorizontal,
@@ -33,7 +32,7 @@ import { AppShell } from '@/components/app-shell';
 import { BulkActionSheet, type BulkActionRequest } from '@/components/bulk-action-sheet';
 import { ChoiceSheet } from '@/components/choice-sheet';
 import { DemoModeBanner } from '@/components/demo-mode-banner';
-import { LibraryFilterSheet } from '@/components/library-filter-sheet';
+import { LibraryFilterSheet, type LibraryFilterFacet } from '@/components/library-filter-sheet';
 import { LibrarySortSheet } from '@/components/library-sort-sheet';
 import { MotionPressable as Pressable, hapticFeedback } from '@/components/motion';
 import { DocumentThumbnail } from '@/components/document-thumbnail';
@@ -145,6 +144,7 @@ const DocumentsScreen = memo(function DocumentsScreen({
   const [viewMode, setViewMode] = useState<'list' | 'grid' | null>(null);
   const [sortOrder, setSortOrder] = useState<LibrarySortOrder>('added-desc');
   const [filterSheetOpen, setFilterSheetOpen] = useState(false);
+  const [filterFacet, setFilterFacet] = useState<LibraryFilterFacet | null>(null);
   const [sortSheetOpen, setSortSheetOpen] = useState(false);
   const [activeSavedView, setActiveSavedView] = useState<string | null>(null);
   const [presetRefined, setPresetRefined] = useState(false);
@@ -449,22 +449,13 @@ const DocumentsScreen = memo(function DocumentsScreen({
     return { after: `${year}-01-01`, before: `${year}-12-31` };
   }, []);
 
-  function toggleQuickFilter(key: 'inbox' | 'untagged' | 'pdf' | 'year') {
+  function toggleQuickFilter(key: 'inbox' | 'untagged' | 'year') {
     setFilters((current) => {
       if (key === 'inbox') {
         return { ...current, status: current.status === 'inbox' ? 'any' : 'inbox' };
       }
       if (key === 'untagged') {
         return { ...current, status: current.status === 'untagged' ? 'any' : 'untagged' };
-      }
-      if (key === 'pdf') {
-        const active = current.mimeTypes.includes('application/pdf');
-        return {
-          ...current,
-          mimeTypes: active
-            ? current.mimeTypes.filter((value) => value !== 'application/pdf')
-            : [...current.mimeTypes, 'application/pdf'],
-        };
       }
       const active = current.createdAfter === thisYear.after && current.createdBefore === thisYear.before;
       return {
@@ -547,6 +538,14 @@ const DocumentsScreen = memo(function DocumentsScreen({
   const narrowed = !!query.trim() || activeFilterCount > 0 || extraRules.length > 0;
   const openFilters = useCallback(() => {
     Keyboard.dismiss();
+    setFilterFacet(null);
+    setFilterSheetOpen(true);
+  }, []);
+  // A quick chip opens the sheet already inside its facet: one tap to the list
+  // of types or folders instead of Filters › Details › the facet.
+  const openFilterFacet = useCallback((facet: LibraryFilterFacet) => {
+    Keyboard.dismiss();
+    setFilterFacet(facet);
     setFilterSheetOpen(true);
   }, []);
   const openSort = useCallback(() => {
@@ -849,6 +848,24 @@ const DocumentsScreen = memo(function DocumentsScreen({
           ? t('bulk.storagePath')
           : t('bulk.owner');
 
+  // Type and folder are the two axes this library is actually filed by; the chip
+  // shows the current value so the row doubles as a reminder of what is applied.
+  const documentTypeFilterActive = filters.documentTypeIds.length > 0 || filters.documentTypeMissing;
+  const tagFilterActive = filters.tagIds.length > 0;
+  const documentTypeChipLabel = facetChipLabel(
+    t('library.typeChip'),
+    filters.documentTypeIds.map((id) => catalog.documentTypes.find((option) => option.id === id)?.name),
+    formatNumber,
+  );
+  const tagChipLabel = facetChipLabel(
+    t('library.tagChip'),
+    filters.tagIds.map((id) => {
+      const option = catalog.tags.find((tag) => tag.id === id);
+      return option?.pathLabel || option?.name;
+    }),
+    formatNumber,
+  );
+
   const listHeader = (
     <View style={styles.listHeader}>
       {!profileConfigured && <DemoModeBanner />}
@@ -945,7 +962,7 @@ const DocumentsScreen = memo(function DocumentsScreen({
         </View>
       </View>
 
-      {connected && !selectionActive && (
+      {connected && !selectionActive && (narrowed || sortOrder !== 'added-desc' || (!!activeSavedView && presetRefined)) && (
         <ScrollView horizontal contentContainerStyle={styles.managementActions} showsHorizontalScrollIndicator={false}>
           {(narrowed || sortOrder !== 'added-desc') && (
             <Pressable accessibilityState={{ disabled: advanced.phase !== 'ready' }} disabled={advanced.phase !== 'ready'} onPress={() => {
@@ -962,14 +979,6 @@ const DocumentsScreen = memo(function DocumentsScreen({
               <Text style={styles.managementButtonStrongText}>{t('library.updateView')}</Text>
             </Pressable>
           )}
-          <Pressable onPress={() => router.push('/saved-views')} style={styles.managementButton}>
-            <Bookmark color={palette.ink} size={15} />
-            <Text style={styles.managementButtonText}>{t('library.manageViews')}</Text>
-          </Pressable>
-          <Pressable onPress={() => router.push('/paperless-metadata')} style={styles.managementButton}>
-            <FolderTree color={palette.ink} size={15} />
-            <Text style={styles.managementButtonText}>{t('metadata.title')}</Text>
-          </Pressable>
         </ScrollView>
       )}
 
@@ -1024,19 +1033,24 @@ const DocumentsScreen = memo(function DocumentsScreen({
             onPress={() => toggleQuickFilter('inbox')}
           />
           <QuickFilter
-            active={filters.status === 'untagged'}
-            label={t('library.untagged')}
-            onPress={() => toggleQuickFilter('untagged')}
+            active={documentTypeFilterActive}
+            label={documentTypeChipLabel}
+            onPress={() => openFilterFacet('documentTypes')}
           />
           <QuickFilter
-            active={filters.mimeTypes.includes('application/pdf')}
-            label={t('library.pdfs')}
-            onPress={() => toggleQuickFilter('pdf')}
+            active={tagFilterActive}
+            label={tagChipLabel}
+            onPress={() => openFilterFacet('tags')}
           />
           <QuickFilter
             active={filters.createdAfter === thisYear.after && filters.createdBefore === thisYear.before}
             label={t('library.thisYear')}
             onPress={() => toggleQuickFilter('year')}
+          />
+          <QuickFilter
+            active={filters.status === 'untagged'}
+            label={t('library.untagged')}
+            onPress={() => toggleQuickFilter('untagged')}
           />
         </ScrollView>
       </View>
@@ -1232,7 +1246,11 @@ const DocumentsScreen = memo(function DocumentsScreen({
         getPreviewCount={getLocalPreviewCount}
         mimeTypes={mimeTypes}
         onApply={updateFilters}
-        onClose={() => setFilterSheetOpen(false)}
+        initialFacet={filterFacet ?? undefined}
+        onClose={() => {
+          setFilterSheetOpen(false);
+          setFilterFacet(null);
+        }}
         visible={filterSheetOpen}
       />
       <LibrarySortSheet
@@ -1518,6 +1536,19 @@ function clearFilterCriterion(filters: LibraryFilters, key: FilterCriterionKey):
     case 'modified': return { ...filters, modifiedAfter: '', modifiedBefore: '' };
     case 'archive': return { ...filters, archiveSerialMin: '', archiveSerialMax: '', archiveSerialMissing: false };
   }
+}
+
+/** "Type ▾", "Facture ▾", "Type · 3 ▾": the chip names the facet, or the value
+ * when a single one is selected. */
+function facetChipLabel(
+  label: string,
+  names: (string | undefined)[],
+  formatNumber: (value: number) => string,
+) {
+  const selected = names.filter((name): name is string => !!name);
+  if (selected.length === 1) return `${selected[0]} ▾`;
+  if (selected.length > 1) return `${label} · ${formatNumber(selected.length)} ▾`;
+  return `${label} ▾`;
 }
 
 function QuickFilter({
