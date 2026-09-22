@@ -1,4 +1,4 @@
-import { Check, ChevronLeft, Copy, Pencil, Plus, RotateCcw, Save, Trash2 } from 'lucide-react-native';
+import { Check, ChevronLeft, Copy, Info, Pencil, Plus, RotateCcw, Save, Trash2 } from 'lucide-react-native';
 import { useEffect, useMemo, useRef, useState } from 'react';
 import {
   ActivityIndicator,
@@ -609,7 +609,10 @@ export default function IntakeScreen() {
           />
         )}
         {!!batchPrefill && (
-          <View style={styles.prefillBanner}>
+          <View style={styles.prefillBanner} accessibilityRole="summary">
+            <View style={styles.prefillIcon}>
+              <Info color={palette.limeDark} size={16} />
+            </View>
             <Text style={styles.prefillCopy}>
               {batchPrefill.origin === 'previous-upload' || !batchPrefill.label
                 ? t('intake.prefillPrevious')
@@ -1118,8 +1121,11 @@ const styles = createThemedStyleSheet({
   secondaryText: { color: palette.ink, fontFamily: fonts.sans, fontSize: 13, fontWeight: '900' },
   primaryButton: { minHeight: 54, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 8, borderRadius: radii.md, backgroundColor: palette.lime },
   primaryText: { color: palette.accentInk, fontFamily: fonts.sans, fontSize: 14, fontWeight: '900' },
-  prefillBanner: { flexDirection: 'row', alignItems: 'center', gap: 10, paddingHorizontal: 14, paddingVertical: 10, borderRadius: radii.md, backgroundColor: palette.paper },
-  prefillCopy: { flex: 1, color: palette.muted, fontFamily: fonts.sans, fontSize: 12, lineHeight: 17 },
+  // Same visual language as the app's other callouts: a tinted surface with an info glyph, so the
+  // prefill is noticed at a glance without competing with the primary action.
+  prefillBanner: { flexDirection: 'row', alignItems: 'center', gap: 10, paddingHorizontal: 12, paddingVertical: 10, borderRadius: radii.md, backgroundColor: palette.limeSurface, borderWidth: 1, borderColor: palette.line },
+  prefillIcon: { width: 28, height: 28, borderRadius: 14, alignItems: 'center', justifyContent: 'center', backgroundColor: palette.paperStrong },
+  prefillCopy: { flex: 1, color: palette.ink, fontFamily: fonts.sans, fontSize: 12, lineHeight: 17 },
   prefillResetButton: { minHeight: 44, flexDirection: 'row', alignItems: 'center', gap: 6, paddingHorizontal: 10, borderRadius: radii.pill, backgroundColor: palette.paperStrong },
   prefillResetText: { color: palette.ink, fontFamily: fonts.sans, fontSize: 12, fontWeight: '800' },
   help: { color: palette.muted, fontFamily: fonts.sans, fontSize: 12, lineHeight: 17 },
