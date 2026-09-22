@@ -1,5 +1,6 @@
 import {
   Bell,
+  Bookmark,
   Check,
   ChevronRight,
   CircleAlert,
@@ -9,6 +10,7 @@ import {
   EyeOff,
   FileText,
   Fingerprint,
+  FolderTree,
   HardDrive,
   Images,
   Info,
@@ -420,6 +422,44 @@ export default function SettingsScreen() {
 
       <Text style={styles.connectLinkHint}>{t('settings.connectLinkHint')}</Text>
 
+      {/* The four Paperless management screens live together here: two of them
+        * used to sit in the library header, above the documents. */}
+      <Text style={styles.sectionLabel}>{t('settings.paperlessSection')}</Text>
+      <View style={styles.settingsGroup}>
+        <SettingRow
+          icon={FolderTree}
+          onPress={() => router.push('/paperless-metadata')}
+          title={t('metadata.title')}
+          subtitle={t('settings.metadataSubtitle')}
+          trailing={<ChevronRight color={colors.faint} size={18} />}
+        />
+        <SettingRow
+          icon={Bookmark}
+          onPress={() => router.push('/saved-views')}
+          title={t('savedViews.title')}
+          subtitle={t('settings.savedViewsSubtitle')}
+          trailing={<ChevronRight color={colors.faint} size={18} />}
+        />
+        <SettingRow
+          icon={Trash2}
+          onPress={() => router.push('/trash')}
+          title={t('settings.recentlyDeleted')}
+          subtitle={t('settings.recentlyDeletedSubtitle')}
+          trailing={<ChevronRight color={colors.faint} size={18} />}
+        />
+        <SettingRow
+          icon={ListTodo}
+          last
+          onPress={() => router.push('/tasks')}
+          title={t('home.taskCenter')}
+          subtitle={t('settings.taskCenterSubtitle', {
+            active: formatNumber(tasks.filter((task) => !['ready', 'canceled', 'failed'].includes(task.stage)).length),
+            failed: formatNumber(tasks.filter((task) => task.stage === 'failed').length),
+          })}
+          trailing={<ChevronRight color={colors.faint} size={18} />}
+        />
+      </View>
+
       <Text style={styles.sectionLabel}>{t('settings.appearanceSection')}</Text>
       <View style={styles.settingsGroup}>
         <PreferenceControl
@@ -468,13 +508,6 @@ export default function SettingsScreen() {
 
       <Text style={styles.sectionLabel}>{t('settings.privacySection')}</Text>
       <View style={styles.settingsGroup}>
-        <SettingRow
-          icon={Trash2}
-          onPress={() => router.push('/trash')}
-          title={t('settings.recentlyDeleted')}
-          subtitle={t('settings.recentlyDeletedSubtitle')}
-          trailing={<ChevronRight color={colors.faint} size={18} />}
-        />
         <SettingRow
           icon={Fingerprint}
           title={t('settings.biometricTitle')}
@@ -665,20 +698,6 @@ export default function SettingsScreen() {
           </View>
         </View>
       )}
-
-      <View style={[styles.settingsGroup, styles.taskCenterGroup]}>
-        <SettingRow
-          icon={ListTodo}
-          last
-          onPress={() => router.push('/tasks')}
-          title={t('home.taskCenter')}
-          subtitle={t('settings.taskCenterSubtitle', {
-            active: formatNumber(tasks.filter((task) => !['ready', 'canceled', 'failed'].includes(task.stage)).length),
-            failed: formatNumber(tasks.filter((task) => task.stage === 'failed').length),
-          })}
-          trailing={<ChevronRight color={colors.faint} size={18} />}
-        />
-      </View>
 
       <Text style={styles.sectionLabel}>{t('settings.aboutSection')}</Text>
       <View style={styles.settingsGroup}>
@@ -1378,7 +1397,6 @@ const themedStyles = createThemedStyleSheet({
   storageActionAffordanceTextDanger: {
     color: palette.danger,
   },
-  taskCenterGroup: { marginTop: 10 },
   updateBadge: {
     minWidth: 42,
     height: 24,

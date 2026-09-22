@@ -34,17 +34,19 @@ test('a PDF operation reports its outcome and refreshes the document on success'
   assert.match(workspace, /onToast\(message\);\s*try \{\s*await onRefresh\(\);/);
   assert.match(workspace, /return \{ ok: true, message \}/);
   assert.match(workspace, /onApply=\{\(plan\) => runPdf\(/);
-  assert.match(workspace, /onMerge=\{\(documentIds\) => runPdf\('merge'/);
+  // Merging lives in its own sheet since lot 3; the sheet closes once the panel toast can be seen.
+  assert.match(workspace, /onMerge=\{\(documentIds\) => void runPdf\('merge'/);
+  assert.match(workspace, /if \(outcome\.ok\) setMergeOpen\(false\)/);
 });
 
 test('the page editor closes on an applied plan or a merge and shows failures in place', () => {
   assert.match(pageEditor, /onApply: \(plan: PdfPageEditorApply\) => Promise<PdfOperationOutcome>/);
-  assert.match(pageEditor, /onMerge: \(documentIds: number\[\]\) => Promise<PdfOperationOutcome>/);
+  assert.match(pageEditor, /onOpenMerge: \(\) => void/);
   assert.match(
     pageEditor,
     /async function run\(operation: \(\) => Promise<PdfOperationOutcome>\) \{\s*const outcome = await operation\(\);\s*if \(outcome\.ok\) \{\s*setOpen\(false\);/,
   );
   assert.match(pageEditor, /if \(outcome\.message\) showToast\(outcome\.message, true\)/);
   assert.match(pageEditor, /const submit = \(\) => void run\(\(\) => onApply\(/);
-  assert.match(pageEditor, /onMerge=\{\(documentIds\) => void run\(\(\) => onMerge\(documentIds\)\)\}/);
+  assert.match(pageEditor, /setOpen\(false\);\s*onOpenMerge\(\);/);
 });

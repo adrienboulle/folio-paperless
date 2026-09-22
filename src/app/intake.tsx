@@ -1,4 +1,4 @@
-import { Check, ChevronLeft, Copy, Info, Pencil, Plus, RotateCcw, Save, Trash2 } from 'lucide-react-native';
+import { Check, ChevronLeft, ChevronRight, Copy, Info, Pencil, RotateCcw, Save, Trash2 } from 'lucide-react-native';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
   ActivityIndicator,
@@ -12,6 +12,7 @@ import {
 import { SafeAreaView } from 'react-native-safe-area-context';
 
 import { MotionPressable as Pressable, hapticFeedback } from '@/components/motion';
+import { ChoiceSheet } from '@/components/choice-sheet';
 import { IntakeRejectionList } from '@/components/intake-rejection-list';
 import { createThemedStyleSheet, fonts, palette, radii, shadows } from '@/constants/theme';
 import { useApp } from '@/context/app-context';
@@ -65,117 +66,50 @@ function optionValue(option?: PaperlessOption): ExplicitValue<PaperlessOption> {
   return option ? { state: 'value', value: option } : { state: 'unset' };
 }
 
-function OptionPicker({
+function fieldRowValue(
+  field: ExplicitValue<PaperlessOption>,
+  t: (key: TranslationKey) => string,
+) {
+  if (field.state === 'value') return field.value.pathLabel || field.value.name;
+  return t(field.state === 'clear' ? 'intake.clearValue' : 'intake.paperlessDecide');
+}
+
+/** The fields a row can hand over to the shared choice sheet. Tags are the only
+ * multiple one; every other row assigns a single catalogue option. */
+type PickerField = 'correspondent' | 'documentType' | 'storagePath' | 'owner' | 'workflow' | 'tags';
+
+/** "Field · value ›": the same row the document detail screen uses, so the most
+ * frequent gesture of the app reaches the searchable sheet instead of a
+ * horizontal chip rail that cannot be scanned with one hand. */
+function FieldRow({
   disabled,
   label,
-  options,
-  quickCreate,
+  onPress,
   value,
-  onChange,
+  unset,
 }: {
   disabled?: boolean;
   label: string;
-  options: PaperlessOption[];
-  quickCreate?: (name: string) => Promise<PaperlessOption>;
-  value: ExplicitValue<PaperlessOption>;
-  onChange: (value: ExplicitValue<PaperlessOption>) => void;
+  onPress: () => void;
+  value: string;
+  unset?: boolean;
 }) {
-  const { t } = useI18n();
   return (
-    <View style={[styles.fieldBlock, disabled && styles.disabled]}>
-      <Text style={styles.label}>{label}</Text>
-      <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.chips}>
-        <Pressable
-          accessibilityRole="radio"
-          accessibilityState={{ disabled, selected: value.state === 'unset' }}
-          disabled={disabled}
-          onPress={() => onChange({ state: 'unset' })}
-          style={[styles.chip, value.state === 'unset' && styles.chipSelected]}>
-          <Text style={[styles.chipText, value.state === 'unset' && styles.chipTextSelected]}>
-            {t('intake.paperlessDecide')}
-          </Text>
-        </Pressable>
-        {options.map((option) => {
-          const selected = value.state === 'value' && value.value.id === option.id;
-          return (
-            <Pressable
-              accessibilityRole="radio"
-              accessibilityState={{ disabled, selected }}
-              disabled={disabled}
-              key={option.id}
-              onPress={() => onChange(optionValue(option))}
-              style={[styles.chip, selected && styles.chipSelected]}>
-              <Text style={[styles.chipText, selected && styles.chipTextSelected]}>{option.name}</Text>
-            </Pressable>
-          );
-        })}
-      </ScrollView>
-      {!!quickCreate && !disabled && (
-        <QuickCreateOption
-          label={label}
-          onCreate={quickCreate}
-          onCreated={(option) => onChange(optionValue(option))}
-        />
-      )}
-    </View>
-  );
-}
-
-function QuickCreateOption({
-  label,
-  onCreate,
-  onCreated,
-}: {
-  label: string;
-  onCreate: (name: string) => Promise<PaperlessOption>;
-  onCreated: (option: PaperlessOption) => void;
-}) {
-  const { t } = useI18n();
-  const [name, setName] = useState('');
-  const [busy, setBusy] = useState(false);
-  const [error, setError] = useState<string | null>(null);
-
-  async function create() {
-    const normalized = name.trim();
-    if (!normalized || busy) return;
-    setBusy(true);
-    setError(null);
-    try {
-      const option = await onCreate(normalized);
-      onCreated(option);
-      setName('');
-    } catch (nextError) {
-      setError(presentRuntimeError(nextError, t('catalogEditor.saveError')));
-    } finally {
-      setBusy(false);
-    }
-  }
-
-  return (
-    <View style={styles.quickCreateBlock}>
-      <View style={styles.quickCreateRow}>
-        <TextInput
-          accessibilityLabel={t('catalogEditor.createLabel', { label })}
-          editable={!busy}
-          onChangeText={setName}
-          placeholder={t('catalogEditor.createLabel', { label })}
-          placeholderTextColor={palette.faint}
-          style={[styles.input, styles.quickCreateInput]}
-          value={name}
-        />
-        <Pressable
-          accessibilityLabel={t('catalogEditor.createLabel', { label })}
-          accessibilityState={{ disabled: busy || !name.trim() }}
-          disabled={busy || !name.trim()}
-          onPress={() => void create()}
-          style={[styles.quickCreateButton, (busy || !name.trim()) && styles.disabled]}>
-          {busy
-            ? <ActivityIndicator color={palette.accentInk} size="small" />
-            : <Plus color={palette.accentInk} size={18} />}
-        </Pressable>
+    <Pressable
+      accessibilityLabel={`${label} · ${value}`}
+      accessibilityRole="button"
+      accessibilityState={{ disabled }}
+      disabled={disabled}
+      onPress={onPress}
+      style={[styles.fieldRow, disabled && styles.disabled]}>
+      <View style={styles.fieldRowCopy}>
+        <Text style={styles.label}>{label}</Text>
+        <Text numberOfLines={2} style={[styles.fieldRowValue, unset && styles.fieldRowValueUnset]}>
+          {value}
+        </Text>
       </View>
-      {!!error && <Text accessibilityLiveRegion="assertive" style={styles.error}>{error}</Text>}
-    </View>
+      <ChevronRight color={palette.faint} size={18} />
+    </Pressable>
   );
 }
 
@@ -221,6 +155,7 @@ export default function IntakeScreen() {
       && !!task.metadata;
   }), [batchId, tasks]);
   const [selectedId, setSelectedId] = useState<string | null>(null);
+  const [picker, setPicker] = useState<PickerField | null>(null);
   const [drafts, setDrafts] = useState<Record<string, UploadMetadataDraft>>({});
   const [presetName, setPresetName] = useState('');
   const [editingPresetId, setEditingPresetId] = useState<string | null>(null);
@@ -596,6 +531,8 @@ export default function IntakeScreen() {
     );
   }
 
+  const selectedTags = draft.tags.state === 'value' ? draft.tags.value : [];
+
   return (
     <SafeAreaView edges={['top']} style={styles.root}>
       <View style={styles.header}>
@@ -763,13 +700,43 @@ export default function IntakeScreen() {
               />
             </View>
           </View>
-          <OptionPicker disabled={!uploadAllowed} label={t('intake.correspondent')} options={catalog.correspondents} quickCreate={canQuickCreate.correspondent ? (name) => createCatalogOption('correspondent', name) : undefined} value={draft.correspondent} onChange={(value) => updateSelected(replaceField(draft, 'correspondent', value))} />
-          <OptionPicker disabled={!uploadAllowed} label={t('intake.documentType')} options={catalog.documentTypes} quickCreate={canQuickCreate.documentType ? (name) => createCatalogOption('documentType', name) : undefined} value={draft.documentType} onChange={(value) => updateSelected(replaceField(draft, 'documentType', value))} />
-          <OptionPicker disabled={!uploadAllowed} label={t('intake.storagePath')} options={catalog.storagePaths} value={draft.storagePath} onChange={(value) => updateSelected(replaceField(draft, 'storagePath', value))} />
-          <OptionPicker disabled={!ownerAssignmentAllowed} label={t('intake.owner')} options={catalog.owners} value={draft.owner} onChange={(value) => updateSelected(replaceField(draft, 'owner', value))} />
+          <FieldRow
+            disabled={!uploadAllowed}
+            label={t('intake.correspondent')}
+            onPress={() => setPicker('correspondent')}
+            unset={draft.correspondent.state !== 'value'}
+            value={fieldRowValue(draft.correspondent, t)}
+          />
+          <FieldRow
+            disabled={!uploadAllowed}
+            label={t('intake.documentType')}
+            onPress={() => setPicker('documentType')}
+            unset={draft.documentType.state !== 'value'}
+            value={fieldRowValue(draft.documentType, t)}
+          />
+          <FieldRow
+            disabled={!uploadAllowed}
+            label={t('intake.storagePath')}
+            onPress={() => setPicker('storagePath')}
+            unset={draft.storagePath.state !== 'value'}
+            value={fieldRowValue(draft.storagePath, t)}
+          />
+          <FieldRow
+            disabled={!ownerAssignmentAllowed}
+            label={t('intake.owner')}
+            onPress={() => setPicker('owner')}
+            unset={draft.owner.state !== 'value'}
+            value={fieldRowValue(draft.owner, t)}
+          />
           {!ownerAssignmentAllowed && uploadAllowed && <Text style={styles.permissionWarning}>{t('intake.ownerPermissionDenied')}</Text>}
           {creationCapabilities.uploadWorkflowOverride === true && !!catalog.workflows?.length && (
-            <OptionPicker disabled={!uploadAllowed} label={t('intake.workflow')} options={catalog.workflows} value={draft.workflow} onChange={(value) => updateSelected(replaceField(draft, 'workflow', value))} />
+            <FieldRow
+              disabled={!uploadAllowed}
+              label={t('intake.workflow')}
+              onPress={() => setPicker('workflow')}
+              unset={draft.workflow.state !== 'value'}
+              value={fieldRowValue(draft.workflow, t)}
+            />
           )}
           {creationCapabilities.uploadWorkflowOverride !== true && draft.workflow.state !== 'unset' && (
             <View style={styles.fieldBlock}>
@@ -782,58 +749,17 @@ export default function IntakeScreen() {
             </View>
           )}
 
-          <View style={styles.fieldBlock}>
-            <Text style={styles.label}>{t('intake.tags')}</Text>
-            <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.chips}>
-              <Pressable
-                disabled={!uploadAllowed}
-                onPress={() => updateSelected(replaceField(draft, 'tags', { state: 'unset' }))}
-                style={[styles.chip, draft.tags.state === 'unset' && styles.chipSelected]}>
-                <Text style={[
-                  styles.chipText,
-                  draft.tags.state === 'unset' && styles.chipTextSelected,
-                ]}>
-                  {t('intake.paperlessDecide')}
-                </Text>
-              </Pressable>
-              {catalog.tags.map((tag) => {
-                const selectedTags = draft.tags.state === 'value' ? draft.tags.value : [];
-                const checked = selectedTags.some((item) => item.id === tag.id);
-                return (
-                  <Pressable
-                    accessibilityRole="checkbox"
-                    accessibilityState={{ checked, disabled: !uploadAllowed }}
-                    disabled={!uploadAllowed}
-                    key={tag.id}
-                    onPress={() => updateSelected(replaceField(draft, 'tags', {
-                      state: 'value',
-                      value: checked
-                        ? selectedTags.filter((item) => item.id !== tag.id)
-                        : [...selectedTags, tag],
-                    }))}
-                    style={[styles.chip, checked && styles.chipSelected]}>
-                    {checked && <Check color={palette.accentInk} size={13} />}
-                    <Text style={[styles.chipText, checked && styles.chipTextSelected]}>{tag.pathLabel || tag.name}{tag.isInboxTag ? ` · ${t('nav.inbox')}` : ''}</Text>
-                  </Pressable>
-                );
-              })}
-            </ScrollView>
-            {canQuickCreate.tag && uploadAllowed && (
-              <QuickCreateOption
-                label={t('catalogEditor.tag')}
-                onCreate={(name) => createCatalogOption('tag', name)}
-                onCreated={(tag) => {
-                  const selectedTags = draft.tags.state === 'value' ? draft.tags.value : [];
-                  updateSelected(replaceField(draft, 'tags', {
-                    state: 'value',
-                    value: selectedTags.some((item) => item.id === tag.id)
-                      ? selectedTags
-                      : [...selectedTags, tag],
-                  }));
-                }}
-              />
-            )}
-          </View>
+          <FieldRow
+            disabled={!uploadAllowed}
+            label={t('intake.tags')}
+            onPress={() => setPicker('tags')}
+            unset={!selectedTags.length}
+            value={selectedTags.length
+              ? formatList(selectedTags.map((tag) => (
+                `${tag.pathLabel || tag.name}${tag.isInboxTag ? ` · ${t('nav.inbox')}` : ''}`
+              )))
+              : t('intake.paperlessDecide')}
+          />
 
           {!!catalog.customFields.length && (
             <View style={styles.customFields}>
@@ -1080,6 +1006,94 @@ export default function IntakeScreen() {
           </Text>
         </Pressable>
       </SafeAreaView>
+
+      {picker === 'correspondent' && <ChoiceSheet
+        allowNone
+        createLabel={t('intake.correspondent')}
+        creationAllowed={canQuickCreate.correspondent}
+        noneLabel={t('intake.paperlessDecide')}
+        noneSubtitle={t('intake.paperlessDecideSubtitle')}
+        onClose={() => setPicker(null)}
+        onConfirm={(selected) => updateSelected(
+          replaceField(draft, 'correspondent', optionValue(selected[0])),
+        )}
+        onCreate={(name) => createCatalogOption('correspondent', name)}
+        options={catalog.correspondents}
+        selectedIds={draft.correspondent.state === 'value' ? [draft.correspondent.value.id] : []}
+        title={t('intake.correspondent')}
+        visible
+      />}
+      {picker === 'documentType' && <ChoiceSheet
+        allowNone
+        createLabel={t('intake.documentType')}
+        creationAllowed={canQuickCreate.documentType}
+        noneLabel={t('intake.paperlessDecide')}
+        noneSubtitle={t('intake.paperlessDecideSubtitle')}
+        onClose={() => setPicker(null)}
+        onConfirm={(selected) => updateSelected(
+          replaceField(draft, 'documentType', optionValue(selected[0])),
+        )}
+        onCreate={(name) => createCatalogOption('documentType', name)}
+        options={catalog.documentTypes}
+        selectedIds={draft.documentType.state === 'value' ? [draft.documentType.value.id] : []}
+        title={t('intake.documentType')}
+        visible
+      />}
+      {picker === 'storagePath' && <ChoiceSheet
+        allowNone
+        noneLabel={t('intake.paperlessDecide')}
+        noneSubtitle={t('intake.paperlessDecideSubtitle')}
+        onClose={() => setPicker(null)}
+        onConfirm={(selected) => updateSelected(
+          replaceField(draft, 'storagePath', optionValue(selected[0])),
+        )}
+        options={catalog.storagePaths}
+        selectedIds={draft.storagePath.state === 'value' ? [draft.storagePath.value.id] : []}
+        title={t('intake.storagePath')}
+        visible
+      />}
+      {picker === 'owner' && <ChoiceSheet
+        allowNone
+        noneLabel={t('intake.paperlessDecide')}
+        noneSubtitle={t('intake.paperlessDecideSubtitle')}
+        onClose={() => setPicker(null)}
+        onConfirm={(selected) => updateSelected(
+          replaceField(draft, 'owner', optionValue(selected[0])),
+        )}
+        options={catalog.owners}
+        selectedIds={draft.owner.state === 'value' ? [draft.owner.value.id] : []}
+        title={t('intake.owner')}
+        visible
+      />}
+      {picker === 'workflow' && <ChoiceSheet
+        allowNone
+        noneLabel={t('intake.paperlessDecide')}
+        noneSubtitle={t('intake.paperlessDecideSubtitle')}
+        onClose={() => setPicker(null)}
+        onConfirm={(selected) => updateSelected(
+          replaceField(draft, 'workflow', optionValue(selected[0])),
+        )}
+        options={catalog.workflows ?? []}
+        selectedIds={draft.workflow.state === 'value' ? [draft.workflow.value.id] : []}
+        title={t('intake.workflow')}
+        visible
+      />}
+      {picker === 'tags' && <ChoiceSheet
+        createLabel={t('catalogEditor.tag')}
+        creationAllowed={canQuickCreate.tag && uploadAllowed}
+        multiple
+        onClose={() => setPicker(null)}
+        onConfirm={(selected) => updateSelected(replaceField(draft, 'tags', selected.length
+          ? { state: 'value', value: selected }
+          // No tag left means the same thing the old "Let Paperless decide" chip
+          // meant: leave the field unset so server matching still applies.
+          : { state: 'unset' }))}
+        onCreate={(name) => createCatalogOption('tag', name)}
+        options={catalog.tags}
+        selectedIds={selectedTags.map((tag) => tag.id)}
+        title={t('intake.tags')}
+        visible
+      />}
     </SafeAreaView>
   );
 }
@@ -1100,6 +1114,10 @@ const styles = createThemedStyleSheet({
   fileTabText: { color: palette.ink, fontFamily: fonts.sans, fontSize: 12, fontWeight: '800' },
   fileTabTextSelected: { color: palette.accentInk },
   fieldBlock: { gap: 7 },
+  fieldRow: { minHeight: 62, flexDirection: 'row', alignItems: 'center', gap: 10, paddingHorizontal: 13, paddingVertical: 11, borderWidth: 1, borderColor: palette.line, borderRadius: radii.sm, backgroundColor: palette.paperStrong },
+  fieldRowCopy: { flex: 1, gap: 3 },
+  fieldRowValue: { color: palette.ink, fontFamily: fonts.sans, fontSize: 15, fontWeight: '700' },
+  fieldRowValueUnset: { color: palette.muted, fontWeight: '600' },
   label: { color: palette.inkSoft, fontFamily: fonts.sans, fontSize: 12, fontWeight: '800' },
   input: { minHeight: 48, color: palette.ink, fontFamily: fonts.sans, fontSize: 15, paddingHorizontal: 13, paddingVertical: 11, borderWidth: 1, borderColor: palette.line, borderRadius: radii.sm, backgroundColor: palette.paperStrong },
   multiline: { minHeight: 92, textAlignVertical: 'top' },
