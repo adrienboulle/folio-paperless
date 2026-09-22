@@ -27,6 +27,7 @@ import {
 import { SafeAreaView } from 'react-native-safe-area-context';
 
 import { MotionPressable as Pressable, useReducedMotion } from '@/components/motion';
+import { DocumentPdfMergeSheet } from '@/components/document-pdf-merge-selection';
 import { DocumentPdfPageEditor } from '@/components/document-pdf-page-editor';
 import { createThemedStyleSheet, fonts, palette, radii } from '@/constants/theme';
 import { useApp } from '@/context/app-context';
@@ -211,6 +212,7 @@ export function DocumentPaperless3Workspace({
   const [password, setPassword] = useState('');
   const [operationResult, setOperationResult] = useState<PaperlessAsyncOperationResult | null>(null);
   const [pdfAccess, setPdfAccess] = useState<PdfAccessSnapshot | null>(null);
+  const [mergeOpen, setMergeOpen] = useState(false);
 
   const capabilities = advanced.phase === 'ready' ? advanced.capabilities : null;
   const advancedApi = advanced.phase === 'ready' ? advanced.api : null;
@@ -751,14 +753,13 @@ export function DocumentPaperless3Workspace({
               </PdfCapability>
               <PdfCapability
                 label={t('paperless3.pageEditorTitle')}
-                supported={pdfEditEnabled || pdfMergeEnabled}
-                detail={capabilities?.features.pdf.edit.detail || capabilities?.features.pdf.merge.detail}>
+                supported={pdfEditEnabled}
+                detail={capabilities?.features.pdf.edit.detail}>
                 {credentials ? (
                   <DocumentPdfPageEditor
-                    busy={busy === 'page-edit' || busy === 'split' || busy === 'merge'}
+                    busy={busy === 'page-edit' || busy === 'split'}
                     credentials={credentials}
                     document={document}
-                    documents={documents}
                     editEnabled={pdfEditEnabled}
                     editUnavailableDetail={capabilities?.features.pdf.edit.detail || t('paperless3.notAdvertisedPdf')}
                     mergeEnabled={pdfMergeEnabled}
@@ -772,14 +773,22 @@ export function DocumentPaperless3Workspace({
                         sourceMode: 'latest_version',
                       }),
                     )}
-                    onMerge={(documentIds) => void runPdf('merge', () => advanced.api.mergeDocuments({
-                      documentIds,
-                      metadataDocumentId: remoteId,
-                      deleteOriginals: false,
-                      archiveFallback: false,
-                      sourceMode: 'latest_version',
-                    }))}
+                    onOpenMerge={() => setMergeOpen(true)}
                     splitEnabled={pdfSplitEnabled}
+                  />
+                ) : <Text style={styles.rowMeta}>{t('paperless3.connect')}</Text>}
+              </PdfCapability>
+              <PdfCapability
+                label={t('paperless3.mergeDocuments')}
+                supported={pdfMergeEnabled}
+                detail={capabilities?.features.pdf.merge.detail}>
+                {credentials ? (
+                  <PrimaryButton
+                    compact
+                    icon={FileStack}
+                    label={t('paperless3.mergeOpen')}
+                    loading={busy === 'merge'}
+                    onPress={() => setMergeOpen(true)}
                   />
                 ) : <Text style={styles.rowMeta}>{t('paperless3.connect')}</Text>}
               </PdfCapability>
@@ -802,6 +811,24 @@ export function DocumentPaperless3Workspace({
           )}
         </ScrollView>
         </KeyboardAvoidingView>
+        {mergeOpen && !!credentials && !!advancedApi && (
+          <DocumentPdfMergeSheet
+            busy={busy === 'merge'}
+            credentials={credentials}
+            currentDocument={document}
+            documents={documents}
+            enabled={pdfMergeEnabled}
+            onClose={() => setMergeOpen(false)}
+            onMerge={(documentIds) => void runPdf('merge', () => advancedApi.mergeDocuments({
+              documentIds,
+              metadataDocumentId: remoteId,
+              deleteOriginals: false,
+              archiveFallback: false,
+              sourceMode: 'latest_version',
+            }))}
+            visible
+          />
+        )}
       </SafeAreaView>
     </Modal>
   );

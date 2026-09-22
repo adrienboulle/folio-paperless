@@ -25,7 +25,6 @@ import {
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
-import { DocumentPdfMergeSelection } from '@/components/document-pdf-merge-selection';
 import { MotionPressable as Pressable, useReducedMotion } from '@/components/motion';
 import { createThemedStyleSheet, fonts, palette, radii } from '@/constants/theme';
 import { useI18n } from '@/i18n';
@@ -78,12 +77,11 @@ type DocumentPdfPageEditorProps = {
   busy: boolean;
   credentials: PaperlessCredentials;
   document: DocumentItem;
-  documents: readonly DocumentItem[];
   editEnabled: boolean;
   editUnavailableDetail?: string;
   mergeEnabled: boolean;
   onApply: (plan: PdfPageEditorApply) => void;
-  onMerge: (documentIds: number[]) => void;
+  onOpenMerge: () => void;
   splitEnabled: boolean;
 };
 
@@ -91,12 +89,11 @@ export function DocumentPdfPageEditor({
   busy,
   credentials,
   document,
-  documents,
   editEnabled,
   editUnavailableDetail,
   mergeEnabled,
   onApply,
-  onMerge,
+  onOpenMerge,
   splitEnabled,
 }: DocumentPdfPageEditorProps) {
   const { colorScheme, formatNumber, t } = useI18n();
@@ -274,9 +271,9 @@ export function DocumentPdfPageEditor({
     <>
       <Pressable
         accessibilityRole="button"
-        disabled={!editEnabled && !mergeEnabled}
+        disabled={!editEnabled}
         onPress={() => setOpen(true)}
-        style={[styles.openButton, !editEnabled && !mergeEnabled && styles.disabled]}>
+        style={[styles.openButton, !editEnabled && styles.disabled]}>
         <FileStack color={palette.accentInk} size={18} />
         <Text style={styles.openButtonText}>{t('paperless3.pageEditorOpen')}</Text>
       </Pressable>
@@ -471,14 +468,20 @@ export function DocumentPdfPageEditor({
               </View>
             )}
 
-            <DocumentPdfMergeSelection
-              busy={busy}
-              credentials={credentials}
-              currentDocument={document}
-              documents={documents}
-              enabled={mergeEnabled}
-              onMerge={onMerge}
-            />
+            {mergeEnabled && (
+              // Joining documents needs no page thumbnails, so it lives in its own
+              // sheet; the editor only keeps a way back to it.
+              <Pressable
+                accessibilityRole="button"
+                onPress={() => {
+                  setOpen(false);
+                  onOpenMerge();
+                }}
+                style={styles.mergeShortcut}>
+                <FileStack color={palette.ink} size={17} />
+                <Text style={styles.mergeShortcutText}>{t('paperless3.mergeOpen')}</Text>
+              </Pressable>
+            )}
           </ScrollView>
           </KeyboardAvoidingView>
         </View>
@@ -553,6 +556,8 @@ const styles = createThemedStyleSheet({
   stateCopy: { color: palette.muted, fontFamily: fonts.sans, fontSize: 11, lineHeight: 17, marginTop: 5, textAlign: 'center' },
   retryButton: { minHeight: 42, alignSelf: 'center', flexDirection: 'row', alignItems: 'center', gap: 7, paddingHorizontal: 14, borderRadius: radii.md, backgroundColor: palette.canvas, marginTop: 14 },
   retryText: { color: palette.ink, fontFamily: fonts.sans, fontSize: 10, fontWeight: '900' },
+  mergeShortcut: { minHeight: 48, alignSelf: 'flex-start', flexDirection: 'row', alignItems: 'center', gap: 9, paddingHorizontal: 17, borderRadius: radii.md, borderWidth: 1, borderColor: palette.line, backgroundColor: palette.paper, marginTop: 24 },
+  mergeShortcutText: { color: palette.ink, fontFamily: fonts.sans, fontSize: 11, fontWeight: '900' },
   selectionHeader: { minHeight: 48, flexDirection: 'row', alignItems: 'center', gap: 12, marginTop: 16 },
   selectionCount: { flex: 1, color: palette.inkSoft, fontFamily: fonts.sans, fontSize: 11, fontWeight: '800' },
   selectButton: { minHeight: 38, justifyContent: 'center', borderRadius: radii.pill, backgroundColor: palette.paper, paddingHorizontal: 13 },

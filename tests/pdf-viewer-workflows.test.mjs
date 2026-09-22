@@ -102,7 +102,9 @@ test('preview remains bound to the explicitly selected representation on native 
 test('workspace submits thumbnail plans only through current dedicated API operations', () => {
   assert.match(workspace, /advanced\.api\.editPdf\(/);
   assert.match(workspace, /updateDocument: !plan\.hasSplits/);
-  assert.match(workspace, /advanced\.api\.mergeDocuments\(/);
+  // Merging moved into its own sheet, which the workspace feeds from the same API bridge.
+  assert.match(workspace, /advancedApi\.mergeDocuments\(/);
+  assert.match(workspace, /metadataDocumentId: remoteId/);
   assert.match(workspace, /deleteOriginals: false/);
   assert.doesNotMatch(workspace, /bulk_edit/);
 });

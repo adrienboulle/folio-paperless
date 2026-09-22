@@ -3,7 +3,6 @@ import { FileStack, X } from 'lucide-react-native';
 import { useState } from 'react';
 import { Modal, ScrollView, Text, View } from 'react-native';
 
-import { DocumentPdfMergeSelection } from '@/components/document-pdf-merge-selection';
 import { MotionPressable as Pressable, useReducedMotion } from '@/components/motion';
 import { createThemedStyleSheet, fonts, palette, radii } from '@/constants/theme';
 import { useI18n } from '@/i18n';
@@ -14,7 +13,6 @@ type DocumentPdfPageEditorProps = {
   busy: boolean;
   credentials: PaperlessCredentials;
   document: DocumentItem;
-  documents: readonly DocumentItem[];
   editEnabled: boolean;
   editUnavailableDetail?: string;
   mergeEnabled: boolean;
@@ -23,18 +21,15 @@ type DocumentPdfPageEditorProps = {
     hasSplits: boolean;
     removedPages: number;
   }) => void;
-  onMerge: (documentIds: number[]) => void;
+  onOpenMerge: () => void;
   splitEnabled: boolean;
 };
 
 export function DocumentPdfPageEditor({
-  busy,
-  credentials,
   document,
-  documents,
   editUnavailableDetail,
   mergeEnabled,
-  onMerge,
+  onOpenMerge,
 }: DocumentPdfPageEditorProps) {
   const { colorScheme, t } = useI18n();
   const reducedMotion = useReducedMotion();
@@ -68,14 +63,17 @@ export function DocumentPdfPageEditor({
                 {editUnavailableDetail || t('paperless3.pageEditorRendererUnavailable')}
               </Text>
             </View>
-            <DocumentPdfMergeSelection
-              busy={busy}
-              credentials={credentials}
-              currentDocument={document}
-              documents={documents}
-              enabled={mergeEnabled}
-              onMerge={onMerge}
-            />
+            {mergeEnabled && (
+              <Pressable
+                onPress={() => {
+                  setOpen(false);
+                  onOpenMerge();
+                }}
+                style={styles.mergeShortcut}>
+                <FileStack color={palette.ink} size={17} />
+                <Text style={styles.mergeShortcutText}>{t('paperless3.mergeOpen')}</Text>
+              </Pressable>
+            )}
           </ScrollView>
         </View>
       </Modal>
@@ -96,4 +94,6 @@ const styles = createThemedStyleSheet({
   unavailable: { padding: 18, borderRadius: radii.md, backgroundColor: palette.paper },
   unavailableTitle: { color: palette.ink, fontFamily: fonts.sans, fontSize: 13, fontWeight: '900' },
   unavailableCopy: { color: palette.muted, fontFamily: fonts.sans, fontSize: 11, lineHeight: 17, marginTop: 5 },
+  mergeShortcut: { minHeight: 48, alignSelf: 'flex-start', flexDirection: 'row', alignItems: 'center', gap: 9, paddingHorizontal: 17, borderRadius: radii.md, borderWidth: 1, borderColor: palette.line, backgroundColor: palette.paper, marginTop: 24 },
+  mergeShortcutText: { color: palette.ink, fontFamily: fonts.sans, fontSize: 11, fontWeight: '900' },
 });
