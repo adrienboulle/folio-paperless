@@ -3,7 +3,9 @@ import {
   ArrowLeft,
   CalendarDays,
   Check,
+  ChevronDown,
   ChevronRight,
+  ChevronUp,
   CircleAlert,
   Download,
   Edit3,
@@ -26,6 +28,7 @@ import {
   Animated,
   BackHandler,
   Easing,
+  Platform,
   Share,
   Text,
   View,
@@ -176,6 +179,7 @@ function ProfileBoundDocumentDetailScreen({
   const [paperlessToolsOpen, setPaperlessToolsOpen] = useState(false);
   const [picker, setPicker] = useState<PickerKind>(null);
   const [moreOpen, setMoreOpen] = useState(false);
+  const [moreDetailsOpen, setMoreDetailsOpen] = useState(false);
   const [busyAction, setBusyAction] = useState<string | null>(null);
   const [toast, setToast] = useState<ToastState | null>(null);
   const [selectedVersionId, setSelectedVersionId] = useState<number | string | undefined>();
@@ -938,13 +942,27 @@ function ProfileBoundDocumentDetailScreen({
               loading={busyAction === 'share'}
               onPress={() => void shareDocument()}
             />
-            <DocumentAction
-              disabled={!document.remoteId}
-              icon={Download}
-              label={t('detail.download')}
-              loading={busyAction === 'download'}
-              onPress={() => void downloadDocument()}
-            />
+            {/* On Android "Download" calls the very same system share sheet as
+              * "Share" (savePaperlessDocument, lib/document-files.ts), so the
+              * slot goes to the gesture of the week instead. Download keeps its
+              * place on the platforms where it writes a file, and stays
+              * available everywhere through "…" › file options. */}
+            {Platform.OS === 'android' ? (
+              <DocumentAction
+                disabled={document.canEdit === false}
+                icon={Tag}
+                label={t('detail.tags')}
+                onPress={() => setPicker('tags')}
+              />
+            ) : (
+              <DocumentAction
+                disabled={!document.remoteId}
+                icon={Download}
+                label={t('detail.download')}
+                loading={busyAction === 'download'}
+                onPress={() => void downloadDocument()}
+              />
+            )}
             <DocumentAction
               disabled={document.canEdit === false}
               icon={Edit3}
@@ -997,6 +1015,18 @@ function ProfileBoundDocumentDetailScreen({
               color={palette.lavender}
             />
             <DetailRow
+              icon={Tag}
+              label={t('detail.tags')}
+              onPress={() => setPicker('tags')}
+              value={document.tags.length
+                ? document.tags.map((tag, index) => {
+                    const option = catalog.tags.find((item) => item.id === document.tagIds[index]);
+                    return `${option?.pathLabel || tag}${option?.isInboxTag ? ` · ${t('nav.inbox')}` : ''}`;
+                  }).join(' · ')
+                : t('detail.noTags')}
+              color={palette.lime}
+            />
+            <DetailRow
               icon={FolderArchive}
               label={t('detail.file')}
               value={t(document.pageCount === 1 ? 'detail.fileMetaOne' : 'detail.fileMetaMany', {
@@ -1010,62 +1040,61 @@ function ProfileBoundDocumentDetailScreen({
           </View>
         </View>
 
-        <DocumentDeepSections
-          document={document}
-          onSelectVersion={(versionId) => {
-            setPreviewFailed(false);
-            setSelectedVersionId(versionId);
-          }}
-          onToast={showToast}
-          selectedVersionId={selectedVersionId}
-        />
-
+        {/* Manager fields — archive number, storage path, custom fields, notes,
+          * versions, extracted text — used to sit between the daily gestures and
+          * the end of the screen. Nothing is gone: they are one tap away. */}
         <View style={styles.section}>
-          <Text style={styles.sectionTitle}>{t('detail.tags')}</Text>
-          <View style={styles.tagCard}>
-            <View style={styles.tagIcon}>
-              <Tag color={palette.accentInk} size={18} />
+          <Pressable
+            accessibilityRole="button"
+            accessibilityState={{ expanded: moreDetailsOpen }}
+            onPress={() => {
+              animateLayout();
+              setMoreDetailsOpen((open) => !open);
+            }}
+            style={styles.moreDetailsToggle}>
+            <View style={styles.moreDetailsCopy}>
+              <Text style={[styles.sectionTitle, styles.moreDetailsTitle]}>{t('detail.moreDetails')}</Text>
+              <Text style={styles.moreDetailsMeta}>{t('detail.moreDetailsCopy')}</Text>
             </View>
-            <View style={styles.tags}>
-              {document.tags.map((tag, index) => {
-                const option = catalog.tags.find((item) => item.id === document.tagIds[index]);
-                return (
-                <View key={document.tagIds[index] || tag} style={styles.tag}>
-                  <Text style={styles.tagText}>{option?.pathLabel || tag}{option?.isInboxTag ? ` · ${t('nav.inbox')}` : ''}</Text>
-                </View>
-                );
-              })}
-              {!document.tags.length && <Text style={styles.noTags}>{t('detail.noTags')}</Text>}
-              <Pressable onPress={() => setPicker('tags')} style={styles.addTag}>
-                <Text style={styles.addTagText}>
-                  {document.tags.length ? t('detail.editTags') : t('detail.addTags')}
+            {moreDetailsOpen
+              ? <ChevronUp color={palette.faint} size={18} />
+              : <ChevronDown color={palette.faint} size={18} />}
+          </Pressable>
+        </View>
+
+        {moreDetailsOpen && <>
+          <DocumentDeepSections
+            document={document}
+            onSelectVersion={(versionId) => {
+              setPreviewFailed(false);
+              setSelectedVersionId(versionId);
+            }}
+            onToast={showToast}
+            selectedVersionId={selectedVersionId}
+          />
+
+          <View style={styles.section}>
+            <Text style={styles.sectionTitle}>{t('detail.extractedText')}</Text>
+            <View style={styles.ocrCard}>
+              <View style={styles.ocrHeader}>
+                <Sparkles color={palette.limeDark} size={16} />
+                <Text style={styles.ocrLabel}>{t('detail.ocrSearchable')}</Text>
+              </View>
+              <Text style={styles.ocrText}>
+                {expandedText ? document.fullText || document.excerpt : document.excerpt}
+              </Text>
+              <Pressable disabled={busyAction === 'ocr'} onPress={toggleFullText}>
+                <Text style={styles.readAll}>
+                  {busyAction === 'ocr'
+                    ? t('detail.loadingText')
+                    : expandedText
+                      ? t('detail.showLess')
+                      : t('detail.readFullText')}
                 </Text>
               </Pressable>
             </View>
           </View>
-        </View>
-
-        <View style={styles.section}>
-          <Text style={styles.sectionTitle}>{t('detail.extractedText')}</Text>
-          <View style={styles.ocrCard}>
-            <View style={styles.ocrHeader}>
-              <Sparkles color={palette.limeDark} size={16} />
-              <Text style={styles.ocrLabel}>{t('detail.ocrSearchable')}</Text>
-            </View>
-            <Text style={styles.ocrText}>
-              {expandedText ? document.fullText || document.excerpt : document.excerpt}
-            </Text>
-            <Pressable disabled={busyAction === 'ocr'} onPress={toggleFullText}>
-              <Text style={styles.readAll}>
-                {busyAction === 'ocr'
-                  ? t('detail.loadingText')
-                  : expandedText
-                    ? t('detail.showLess')
-                    : t('detail.readFullText')}
-              </Text>
-            </Pressable>
-          </View>
-        </View>
+        </>}
 
         {from === 'inbox' && document.status === 'inbox' && (
           <Pressable
@@ -1739,6 +1768,28 @@ const styles = createThemedStyleSheet({
     paddingHorizontal: 14,
     borderRadius: radii.lg,
     backgroundColor: palette.paper,
+  },
+  moreDetailsToggle: {
+    minHeight: 60,
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 11,
+    paddingHorizontal: 14,
+    paddingVertical: 12,
+    borderRadius: radii.lg,
+    backgroundColor: palette.paper,
+  },
+  moreDetailsCopy: {
+    flex: 1,
+  },
+  moreDetailsTitle: {
+    marginBottom: 2,
+  },
+  moreDetailsMeta: {
+    color: palette.muted,
+    fontFamily: fonts.sans,
+    fontSize: 12,
+    lineHeight: 17,
   },
   detailRow: {
     minHeight: 65,
