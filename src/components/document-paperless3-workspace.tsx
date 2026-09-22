@@ -699,7 +699,21 @@ export function DocumentPaperless3Workspace({
             <>
               <SectionIntro title={t('paperless3.pdfOperations')} copy={t('paperless3.pdfOperationsCopy')} />
               <PdfCapability label={t('paperless3.rotate90')} supported={pdfRotateEnabled} detail={capabilities?.features.pdf.rotate.detail}>
-                <PrimaryButton compact icon={RotateCw} label={t('paperless3.rotateDocument')} loading={busy === 'rotate'} onPress={() => void runPdf('rotate', () => advanced.api.rotateDocuments({ documentIds: [remoteId], degrees: 90 }))} />
+                <PrimaryButton
+                  compact
+                  disabled={!!busy}
+                  icon={RotateCw}
+                  label={t('paperless3.rotateDocument')}
+                  loading={busy === 'rotate'}
+                  onPress={() => void runPdf(
+                    'rotate',
+                    () => advanced.api.rotateDocuments({ documentIds: [remoteId], degrees: 90 }),
+                    { successMessage: t('paperless3.rotateSucceeded') },
+                  )}
+                />
+                {busy === 'rotate' && (
+                  <Text accessibilityLiveRegion="polite" style={styles.rowMeta}>{t('paperless3.rotateRunning')}</Text>
+                )}
               </PdfCapability>
               <PdfCapability
                 label={t('paperless3.pageEditorTitle')}
@@ -782,8 +796,8 @@ function DuplicateComparisonCard({ document, fallbackTitle, label }: { document?
   );
 }
 
-function PrimaryButton({ compact, destructive, icon: Icon, label, loading, onPress }: { compact?: boolean; destructive?: boolean; icon?: typeof Check; label: string; loading?: boolean; onPress: () => void }) {
-  return <Pressable disabled={loading} onPress={onPress} style={[styles.primary, compact && styles.primaryCompact, destructive && styles.primaryDestructive]}>{loading ? <ActivityIndicator color={destructive ? palette.paper : palette.accentInk} size="small" /> : Icon ? <Icon color={destructive ? palette.paper : palette.accentInk} size={17} /> : null}<Text style={[styles.primaryText, destructive && styles.primaryTextDestructive]}>{label}</Text></Pressable>;
+function PrimaryButton({ compact, destructive, disabled, icon: Icon, label, loading, onPress }: { compact?: boolean; destructive?: boolean; disabled?: boolean; icon?: typeof Check; label: string; loading?: boolean; onPress: () => void }) {
+  return <Pressable accessibilityState={{ disabled: !!disabled || !!loading }} disabled={disabled || loading} onPress={onPress} style={[styles.primary, compact && styles.primaryCompact, destructive && styles.primaryDestructive, (disabled || loading) && styles.pdfDisabled]}>{loading ? <ActivityIndicator color={destructive ? palette.paper : palette.accentInk} size="small" /> : Icon ? <Icon color={destructive ? palette.paper : palette.accentInk} size={17} /> : null}<Text style={[styles.primaryText, destructive && styles.primaryTextDestructive]}>{label}</Text></Pressable>;
 }
 
 function PermissionPrincipals({ draft, groups, onChange, users }: { draft: PaperlessPermissionSet; groups: Principal[]; onChange: (value: PaperlessPermissionSet) => void; users: Principal[] }) {
